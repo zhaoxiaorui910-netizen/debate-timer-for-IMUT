@@ -1,0 +1,192 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>辩论赛计时器</title>
+<link rel="stylesheet" href="style.css" />
+</head>
+<body>
+
+  <!-- ============ 设置 / 编辑 ============ -->
+  <section id="screen-setup" class="screen active">
+    <div class="setup-scroll">
+      <h1 class="setup-title">辩论赛计时器</h1>
+
+      <div class="card">
+        <div class="card-h"><span>1 · 我的比赛版本</span>
+          <span class="muted" id="ver-open"></span></div>
+        <div class="ver-list" id="version-list"></div>
+        <div class="btnrow">
+          <button id="btn-ver-new" class="btn" type="button">＋ 新建空白版本</button>
+          <label class="btn btn-file">导入版本 JSON<input id="file-ver-import" type="file" accept=".json,application/json" hidden /></label>
+        </div>
+        <div class="muted">每个版本 = 一份完整配置(赛制 + 比赛信息 + 计时背景 + 投屏外观;封面/结束等整幅图就排在赛制的图文环节行里),互不覆盖。底部「保存为版本」把当前整份存下;▶ 用该版本直接开赛,「修改」载入继续编辑。</div>
+      </div>
+
+      <div class="card">
+        <div class="card-h"><span>2 · 选择或编辑赛制</span>
+          <span class="muted" id="working-source"></span></div>
+        <div class="row-list" id="format-list"></div>
+        <div class="muted">点击即载入为「可编辑副本」,改动需另存为我的赛制;内置不会被覆盖。</div>
+      </div>
+
+      <div class="card">
+        <div class="card-h"><span>3 · 逐环节编辑</span>
+          <span class="muted">改名 / 选类型 / 填时长,均可</span></div>
+        <div class="meta-line">
+          <label>赛制名 <input id="fmt-name" type="text" maxlength="30" placeholder="我的赛制" /></label>
+          <label>警告提示
+            <select id="fmt-warning">
+              <option value="10">10 秒前</option>
+              <option value="20">20 秒前</option>
+              <option value="30" selected>30 秒前</option>
+              <option value="60">60 秒前</option>
+              <option value="0">关闭</option>
+            </select></label>
+          <button id="btn-allpool" class="btn btn-small">全部改为预算共用</button>
+        </div>
+        <div id="budget-line" class="meta-line hidden">
+          <label>每队总预算(预算共用时) 正方
+            <input id="pool-aff" type="text" value="18:00" /></label>
+          <label>反方 <input id="pool-neg" type="text" value="18:00" /></label>
+        </div>
+
+        <table class="stage-tbl" id="stage-tbl">
+          <thead><tr>
+            <th class="c-num">#</th><th>环节名</th><th>类型</th><th>正方时长</th>
+            <th>反方时长</th><th>先手</th><th class="c-ops">操作</th>
+          </tr></thead>
+          <tbody id="stage-rows"></tbody>
+        </table>
+        <div class="btnrow wrap">
+          <button id="btn-add" class="btn">＋ 计时环节</button>
+          <button id="btn-add-img" class="btn">＋ 图片环节</button>
+          <button id="btn-add-text" class="btn">＋ 文字环节</button>
+          <button id="btn-ins-cover" class="btn btn-small">封面(图文)置首</button>
+          <button id="btn-append-end" class="btn btn-small">结束(图文)追加</button>
+        </div>
+        <div class="muted stage-hint">图片环节 = 全屏一整幅图(封面 / 结束用,每行可各自上传一张);文字环节 = 计时页背景 + 居中文字,顶部仍显示辩题与队名。内容环节不倒数,点「上一环 / 下一环」像翻页一样推进。</div>
+
+        <div class="btnrow">
+          <button id="btn-save" class="btn btn-primary">存为我的赛制</button>
+          <button id="btn-export" class="btn">导出 JSON</button>
+          <label class="btn btn-file">导入 JSON<input id="file-import" type="file" accept="application/json,.json" hidden /></label>
+          <button id="btn-del-custom" class="btn btn-danger">删除所选自定义</button>
+        </div>
+        <div id="edit-msg" class="muted"></div>
+      </div>
+
+      <div class="card">
+        <div class="card-h"><span>4 · 比赛信息与画面</span></div>
+        <div class="meta-grid">
+          <label>赛事名 <input id="set-event" type="text" maxlength="40" placeholder="如:第三届华语辩论赛" /></label>
+          <label>辩题 <input id="set-topic" type="text" maxlength="80" placeholder="正方应……" /></label>
+          <label>正方队伍名 <input id="set-aff" type="text" maxlength="20" placeholder="正方" /></label>
+          <label>反方队伍名 <input id="set-neg" type="text" maxlength="20" placeholder="反方" /></label>
+        </div>
+        <div class="art-grid">
+          <div class="art-slot">
+            <div class="art-thumb" id="art-timer-thumb"></div>
+            <label class="btn btn-file">上传计时背景<input id="file-timer" type="file" accept="image/*" hidden /></label>
+            <button class="btn btn-small" data-art-reset="timer">清除</button>
+            <div class="bgp-row"><span class="ap-chips-label">内置</span><span class="ap-chips" id="bgp-timer"></span></div>
+          </div>
+        </div>
+        <div class="muted">此背景用于所有计时环节与「文字环节」;封面 / 结束等图文页请到「3 · 逐环节编辑」里对该行单独上传整幅图(每行各传一张),行内也可改用内置底色。</div>
+      </div>
+
+      <div class="card">
+        <div class="card-h"><span>5 · 投屏外观(可选)</span>
+          <span class="muted">只作用于比赛大屏,全局记忆,可一键恢复默认</span></div>
+
+        <div class="ap-block">
+          <div class="ap-block-h"><span>辩题 / 队伍名位置</span>
+            <span class="muted">在下方假屏上拖动即可;中央灰带为计时区,不可覆盖</span></div>
+          <div class="ap-preview" id="ap-preview">
+            <div class="ap-zone ap-stage-zone" id="ap-zone-stage">环节示例</div>
+            <div class="ap-zone ap-clock-zone" id="ap-zone-clock">0:00</div>
+            <div class="ap-drag ap-drag-topic" id="ap-drag-topic">辩题文字(示例)</div>
+            <div class="ap-drag ap-drag-teams" id="ap-drag-teams">正方 · 示例队</div>
+          </div>
+          <div class="ap-chips-row">
+            <span class="ap-chips" id="ap-preset-topic"></span>
+          </div>
+          <div class="ap-chips-row">
+            <span class="ap-chips" id="ap-preset-teams"></span>
+          </div>
+        </div>
+
+        <div class="ap-style-h">文字样式(颜色 / 字号,字号随屏幕缩放)</div>
+        <div class="ap-style-grid" id="ap-style-rows"></div>
+
+        <div class="btnrow">
+          <label class="ap-chk"><input type="checkbox" id="ap-shadow" /> 文字投影(浅色背景看不清时可关)</label>
+          <button id="btn-ap-reset" class="btn btn-danger">恢复默认外观</button>
+          <span class="muted" id="ap-msg"></span>
+        </div>
+      </div>
+
+      <div class="setup-foot">
+        <button id="btn-ver-save" class="btn btn-primary" type="button">保存为版本</button>
+        <button id="btn-start" class="btn btn-start">开始比赛 ▶</button>
+        <div id="setup-msg" class="muted"></div>
+      </div>
+
+      <!-- ============ 底部帮助:如何打开 / 转发给别人 ============ -->
+      <div class="card help-card">
+        <details class="help-box">
+          <summary>如何使用 · 转发给他人 / 换台电脑(点开)</summary>
+          <ul class="help-list">
+            <li><b>打开 / 自己用:</b>双击 <b>辩论赛计时器.html</b> 即可,无需安装任何东西。</li>
+            <li><b>转发工具本身:</b>只需把 <b>辩论赛计时器.html</b> 这一个文件发给对方即可。用微信 / QQ 发送时,如果对方无法接收 .html 文件,可先压缩成 zip 再发送;对方解压后双击即可。</li>
+            <li><b>只发 html,对方是从零开始:</b>每个人的版本、上传的背景、外观只保存在<b>当前这台电脑的浏览器</b>里(不联网、不上传)。对方只拿到 html 时需自行配置赛制与比赛信息(但内置赛制可直接选用)。</li>
+            <li><b>想把「整套配好的比赛」一起发过去:</b>在卡片「1 · 我的比赛版本」找到对应那一行,点它的「导出」,浏览器会下载一个 <code>名字.json</code>;把这个 json 连同 html 一起发给对方。对方打开 html 后,在卡片 1 底部点「导入版本 JSON」选该文件,赛制、赛事名、辩题、队伍名、背景图、投屏外观会<b>全部还原</b>。</li>
+            <li><b>备份 / 换电脑:</b>重要版本随时可用「导出」留档;换电脑或重装浏览器后,用「导入版本 JSON」即可恢复。</li>
+          </ul>
+        </details>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ 投屏(唯一):计时 / 图文 / 文字 三种形态由环节类型切换 ============ -->
+  <section id="screen-timing" class="screen">
+    <div class="bg-layer" id="timer-bg"></div>
+    <div class="t-head">
+      <div class="t-topic" id="t-topic"></div>
+      <div class="t-teams">
+        <div class="t-side aff" id="name-aff"></div>
+        <div class="t-side neg" id="name-neg"></div>
+      </div>
+    </div>
+    <div class="t-midflex">
+      <div class="t-stage" id="t-stage"></div>
+      <div class="t-body" id="t-body">
+        <div class="team-cell aff" id="card-aff">
+          <div class="team-time" id="time-aff">0:00</div>
+          <div class="team-state" id="state-aff"></div>
+        </div>
+        <div class="team-cell neg" id="card-neg">
+          <div class="team-time" id="time-neg">0:00</div>
+          <div class="team-state" id="state-neg"></div>
+        </div>
+      </div>
+    </div>
+    <div class="slide-layer" id="slide-layer">
+      <div class="content-msg" id="content-msg"></div>
+    </div>
+  </section>
+
+  <!-- 全局右下角操作栏(设置/投屏共用;悬停展开) -->
+  <div id="ops-root" class="ops-root hidden"></div>
+
+  <div id="toast" class="toast hidden"></div>
+
+  <script src="engine.js"></script>
+  <script src="presets.js"></script>
+  <script src="appearance.js"></script>
+  <script src="versions.js"></script>
+  <script src="editor.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>

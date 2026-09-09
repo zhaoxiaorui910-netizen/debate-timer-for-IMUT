@@ -1,0 +1,2646 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>辩论赛计时器</title>
+<style>
+/* 辩论赛计时器 样式 */
+:root {
+  --paper: #f6f1e6;
+  --card: #ffffff;
+  --muted: #8a8a86;
+  --line: #e3dccb;
+  --danger: #c0392b;
+  --aff: #ff6a4d;   /* 保留用于设置页点缀 */
+  --neg: #5aa2ff;
+
+  /* 内置背景(默认深绿 + 可选夜色/烟紫)。.bg-layer 与 art-thumb 共用,
+     免上传即可换投屏底色。 */
+  --bg-green: radial-gradient(1100px 560px at 20% -10%, rgba(255,106,77,.12), transparent 60%),
+    radial-gradient(1100px 560px at 90% 120%, rgba(90,162,255,.12), transparent 60%),
+    linear-gradient(160deg, #17382e, #10241c 70%);
+  --bg-blue: radial-gradient(1100px 560px at 18% -8%, rgba(90,180,255,.16), transparent 58%),
+    radial-gradient(1100px 560px at 90% 118%, rgba(200,120,255,.16), transparent 60%),
+    linear-gradient(160deg, #123052, #091a30 72%);
+  --bg-purple: radial-gradient(1100px 560px at 18% -8%, rgba(255,120,190,.16), transparent 58%),
+    radial-gradient(1100px 560px at 90% 115%, rgba(150,110,255,.18), transparent 60%),
+    linear-gradient(160deg, #2c1237, #160a21 72%);
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; height: 100%; }
+body {
+  font-family: "PingFang SC", "Microsoft YaHei", system-ui, sans-serif;
+  background: #0f1d18; color: #1b2a24; -webkit-font-smoothing: antialiased;
+}
+button { font-family: inherit; }
+.hidden { display: none !important; }
+.muted { color: var(--muted); font-size: 13px; }
+
+/* 页面切换:淡入淡出(封面→计时不再生硬) */
+.screen {
+  position: fixed; inset: 0;
+  opacity: 0; visibility: hidden;
+  transition: opacity .32s ease, visibility 0s linear .32s;
+}
+.screen.active { opacity: 1; visibility: visible; transition: opacity .32s ease; }
+
+.bg-layer {
+  position: absolute; inset: 0; z-index: 0;
+  background: var(--bg-green);
+  background-size: cover; background-position: center; background-repeat: no-repeat;
+}
+
+/* ---------- 设置屏 ---------- */
+#screen-setup { overflow: auto; background:
+  radial-gradient(900px 500px at 15% -5%, rgba(255,106,77,.10), transparent 55%),
+  radial-gradient(900px 500px at 95% 110%, rgba(90,162,255,.10), transparent 55%),
+  linear-gradient(160deg, #eef0ec, #f7f4ec);
+}
+.setup-scroll { max-width: 1040px; margin: 0 auto; padding: 22px 18px 48px; }
+.setup-title { font-size: 22px; margin: 2px 0 14px; color: #16332a; }
+.card { background: var(--card); border: 1px solid var(--line); border-radius: 12px;
+  padding: 14px 16px; margin-bottom: 14px; box-shadow: 0 1px 8px rgba(18,37,31,.06); }
+.card-h { display: flex; justify-content: space-between; align-items: baseline;
+  font-weight: 700; font-size: 14px; margin-bottom: 10px; color: #16332a; }
+.row-list { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 10px; }
+.fmt-chip { border: 1px solid var(--line); background: #fbfaf5; border-radius: 999px;
+  padding: 6px 12px; cursor: pointer; font-size: 13px; user-select: none; }
+.fmt-chip.sel { border-color: var(--aff); background: #fff0ea; color: #a33a1e; font-weight: 600; }
+.fmt-chip .tag { font-size: 11px; color: var(--muted); margin-left: 5px; }
+
+.btn { border: 1px solid #cbbfa8; background: #fff; border-radius: 9px; padding: 8px 13px;
+  cursor: pointer; font-size: 13px; color: #243a32; transition: filter .1s; }
+.btn:hover { filter: brightness(.96); }
+.btn:disabled { opacity: .45; cursor: not-allowed; }
+.btn-primary { background: #1e7a55; border-color: #1e7a55; color: #fff; }
+.btn-start { background: var(--aff); border-color: var(--aff); color: #fff;
+  font-size: 15px; padding: 10px 22px; border-radius: 10px; font-weight: 600; }
+.btn-danger { color: var(--danger); border-color: #e5b7b2; }
+.btn-small { padding: 5px 9px; font-size: 12px; border-radius: 7px; }
+.btn-file { display: inline-block; }
+.btnrow { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-top: 8px; }
+
+.meta-line { display: flex; flex-wrap: wrap; gap: 16px; align-items: flex-end; margin-bottom: 10px; }
+.meta-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 12px; }
+label { font-size: 12px; color: #45574f; display: flex; flex-direction: column; gap: 4px; }
+input, select { border: 1px solid var(--line); border-radius: 7px; padding: 6px 9px;
+  font-size: 13px; background: #fff; color: #223; font-family: inherit; }
+input:focus, select:focus { outline: 2px solid #d9c9a8; }
+
+.stage-tbl { width: 100%; border-collapse: collapse; font-size: 13px; }
+.stage-tbl th { text-align: left; font-size: 12px; color: var(--muted); padding: 5px 4px;
+  border-bottom: 1px solid var(--line); }
+.stage-tbl td { padding: 3px 4px; border-bottom: 1px dashed #efe9da; }
+.stage-tbl input[type=text], .stage-tbl input:not([type]) { width: 100%; min-width: 86px; padding: 5px 7px; }
+.stage-tbl select { min-width: 72px; }
+.c-num { width: 22px; color: var(--muted); font-size: 12px; }
+.c-ops { width: 118px; }
+.op-btn { background: none; border: 1px solid var(--line); border-radius: 5px;
+  padding: 2px 7px; cursor: pointer; font-size: 12px; margin: 0 2px; }
+.op-btn:hover { background: #f2efe4; }
+.op-del:hover { background: #fdecea; color: var(--danger); border-color: #e5b7b2; }
+.row-pool { background: #f1f6f3; }
+
+.art-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 12px; margin-top: 12px; }
+.art-slot { display: flex; flex-direction: column; gap: 6px; align-items: flex-start; }
+.art-thumb { width: 100%; height: 84px; border-radius: 9px; border: 1px dashed #cfc4ab;
+  background: var(--bg-green) center/cover; }
+.art-thumb.has { border-style: solid; }
+.setup-foot { text-align: center; margin-top: 4px; }
+
+/* ---------- 投屏:辩题高置、队名两侧、环节名居中、大数字亮度区分 ---------- */
+#screen-timing .bg-layer { filter: none; }
+
+.t-head {
+  position: absolute; top: 0; left: 0; right: 0; z-index: 3;
+  padding: 3.5vh 5vw 0; color: #fff;
+  text-shadow: 0 1px 8px rgba(0,0,0,.7);
+}
+.t-topic { text-align: center; font-size: clamp(15px, 2vw, 24px); letter-spacing: 1px;
+  opacity: .92; line-height: 1.4; margin: 0 auto 1.4vh; max-width: 90vw; }
+.t-mid { display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; gap: 2vw; }
+.t-side { font-size: clamp(17px, 2.8vw, 36px); font-weight: 700; opacity: 1; line-height: 1.2; }
+.t-side.aff { text-align: right; }
+.t-side.neg { text-align: left; }
+.t-side.off { opacity: .4; }
+.t-stage { text-align: center; font-size: clamp(18px, 2.9vw, 42px); font-weight: 700;
+  letter-spacing: 2px; white-space: nowrap; }
+.t-rule { margin: 1.4vh auto 0; height: 1px; width: 74%;
+  background: linear-gradient(90deg, transparent, rgba(255,255,255,.55), transparent); }
+
+.t-body {
+  position: absolute; top: 20vh; left: 0; right: 0; bottom: 0; z-index: 2;
+  display: grid; grid-template-columns: 1fr 1fr; align-items: center;
+}
+.team-cell {
+  height: 100%; display: flex; flex-direction: column; align-items: center;
+  justify-content: center; cursor: pointer;
+  opacity: 1; transition: opacity .25s;
+}
+.team-cell.aff { align-items: center; }
+.team-cell.off { opacity: .32; }
+.team-cell.live .team-time { transform: scale(1.04); }
+.team-time {
+  font-size: clamp(64px, 15vw, 210px); font-weight: 700; line-height: 1.05;
+  font-variant-numeric: tabular-nums; color: #fff;
+  text-shadow: 0 4px 26px rgba(0,0,0,.55); letter-spacing: 1px; transition: transform .2s;
+}
+.team-time.dim { opacity: .5; }
+.team-state { margin-top: 1vh; font-size: clamp(13px, 1.8vw, 20px); color: #fff; opacity: .9;
+  min-height: 1.2em; text-shadow: 0 1px 6px rgba(0,0,0,.7); }
+#screen-timing.solo .t-body { grid-template-columns: 1fr; }
+#screen-timing.solo .team-cell { justify-content: center; }
+
+/* 右下角操作栏(悬停展开) */
+.ops { position: absolute; right: 12px; bottom: 14px; z-index: 6;
+  display: flex; flex-direction: column; align-items: flex-end; }
+.ops-bar { display: flex; gap: 6px; align-items: center; }
+#dock-toggle.dock-main { background: #fff; color: #12251f; font-weight: 700;
+  font-size: 15px; padding: 11px 26px; border-radius: 999px; border: none;
+  box-shadow: 0 4px 18px rgba(0,0,0,.35); }
+#dock-toggle.dock-main:hover { background: #f0f0ea; }
+.ops-dot { width: 42px; height: 42px; border-radius: 999px; background: rgba(0,0,0,.45);
+  color: #fff; border: 1px solid rgba(255,255,255,.3); cursor: pointer; font-size: 20px; line-height: 1; }
+.ops-dot:hover { background: rgba(0,0,0,.62); }
+/* 常驻主按钮(开始/暂停等):不再用红色实底,改与 ⋯ 同款的深色半透明 */
+.ops-root .dock-main {
+  background: rgba(0,0,0,.45); color: #fff; border: 1px solid rgba(255,255,255,.3);
+  font-weight: 700; font-size: 15px; padding: 10px 24px; border-radius: 999px;
+  box-shadow: none; }
+.ops-root .dock-main:hover { background: rgba(0,0,0,.62); filter: none; }
+
+.ops-panel { margin-bottom: 8px; max-width: min(88vw, 600px);
+  background: rgba(12,22,18,.82); border: 1px solid rgba(255,255,255,.16);
+  border-radius: 14px; padding: 9px 12px; color: #fff;
+  display: flex; flex-direction: column; gap: 1px; backdrop-filter: blur(7px);
+  opacity: 0; visibility: hidden; transform: translateY(6px);
+  transition: opacity .12s, transform .12s, visibility .12s; pointer-events: none; }
+.ops:hover .ops-panel, .ops.open .ops-panel { opacity: 1; visibility: visible;
+  transform: none; pointer-events: auto; }
+.og { display: flex; align-items: center; flex-wrap: wrap; gap: 6px; padding: 5px 0; }
+.og + .og { border-top: 1px solid rgba(255,255,255,.1); }
+.og-t { min-width: 58px; font-size: 12px; color: rgba(255,255,255,.6); }
+.og-btn { background: rgba(255,255,255,.1); color: #fff; border: 1px solid rgba(255,255,255,.2);
+  border-radius: 999px; padding: 6px 13px; cursor: pointer; font-size: 13px; }
+.og-btn:hover { background: rgba(255,255,255,.22); }
+.og-btn.danger { color: #ffb0a4; border-color: rgba(255,150,130,.45); }
+
+/* toast */
+.toast { position: fixed; left: 50%; bottom: 30px; transform: translateX(-50%); z-index: 60;
+  background: #16332a; color: #fff; padding: 9px 16px; border-radius: 9px; font-size: 13px;
+  box-shadow: 0 6px 20px rgba(0,0,0,.3); max-width: 80vw; }
+
+@media (max-width: 700px) {
+  #dock-toggle.dock-main { padding: 10px 22px; }
+}
+
+/* ===== v4:环节名贴数字上方;队伍名两侧拉开;辩题略放大 ===== */
+#screen-timing .t-head {
+  position: absolute; top: 0; left: 0; right: 0; z-index: 3;
+  padding: 2.6vh 2vw 0; text-align: center; color: #fff;
+  text-shadow: 0 1px 8px rgba(0,0,0,.7); pointer-events: none;
+}
+#screen-timing .t-topic {
+  font-size: clamp(22px, 4vw, 52px); font-weight: 600; letter-spacing: 1px;
+  color: #fff; opacity: .97; margin: 0 auto; line-height: 1.4; max-width: 92vw;
+}
+#screen-timing .t-teams {
+  display: grid; grid-template-columns: 1fr 1fr;
+  margin-top: 1vh; padding: 0 2vw;
+}
+#screen-timing .t-side { font-size: clamp(22px, 4vw, 52px); font-weight: 700;
+  line-height: 1.3; color: #fff; }
+#screen-timing .t-side.aff { text-align: left; }
+#screen-timing .t-side.neg { text-align: right; }
+
+/* 数字区占满整屏并真正居中;环节名固定白字、悬于数字上方 */
+#screen-timing .t-midflex {
+  position: absolute; inset: 0; z-index: 2;
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  color: #fff; padding: 0 2vw;
+}
+#screen-timing .t-stage {
+  font-size: clamp(20px, 3vw, 46px); font-weight: 700; letter-spacing: 2px;
+  white-space: nowrap; max-width: 92vw; line-height: 1.25; color: #fff;
+  margin: 0 0 1.2vh; text-shadow: 0 1px 10px rgba(0,0,0,.75);
+}
+#screen-timing .t-body {
+  position: static; top: auto; left: auto; right: auto; bottom: auto;
+  width: 100%; max-width: 1500px;
+  display: grid; grid-template-columns: 1fr 1fr; align-items: center;
+}
+#screen-timing.solo .t-body { grid-template-columns: 1fr; }
+#screen-timing .team-cell { padding: 0 3vw; }
+.team-cell.off { opacity: .32; }
+
+/* ===== v3:全局右下角操作栏(悬停) + 数字整屏居中 + 头部三行层次 ===== */
+.ops-root { position: fixed; right: 12px; bottom: 14px; z-index: 40; }
+.ops-root.hidden { display: none !important; }
+.ops-root > .ops { position: static; }
+/* 操作栏平时半透明、不遮背景;鼠标移过去或展开面板时才恢复全实 */
+.ops-root > .ops { opacity: .35; transition: opacity .18s ease; }
+/* 悬停/展开时整栏仍保持半透明(不整块盖住背景),鼠标离开回落 */
+.ops-root:hover > .ops, .ops-root > .ops.open { opacity: .62; }
+
+/* 计时页头部:辩题 → 队伍名(两列上) → 环节名(独立居中行) */
+.t-head {
+  position: absolute; top: 0; left: 0; right: 0; z-index: 3; text-align: center;
+  padding: 2.4vh 4vw 0; color: #fff;
+  text-shadow: 0 1px 8px rgba(0,0,0,.7); pointer-events: none;
+}
+.t-teams { display: grid; grid-template-columns: 1fr 1fr; gap: 6vw; margin-top: 1.2vh; }
+.t-side { font-size: clamp(17px, 2.8vw, 36px); font-weight: 700; line-height: 1.25;
+  opacity: 1; }
+.t-side.off { opacity: .4; }
+.t-stage {
+  margin: 2vh auto 0; font-size: clamp(18px, 2.8vw, 42px); font-weight: 700;
+  letter-spacing: 2px; white-space: nowrap; max-width: 92vw;
+}
+
+/* 数字区:占满全屏并横竖居中 */
+.t-body {
+  position: absolute; inset: 0; z-index: 2;
+  display: grid; grid-template-columns: 1fr 1fr; align-items: center;
+}
+.team-cell {
+  height: 100%; display: flex; flex-direction: column; align-items: center;
+  justify-content: center; cursor: pointer;
+  opacity: 1; transition: opacity .25s;
+}
+.team-cell.off { opacity: .32; }
+.team-cell.live .team-time { transform: scale(1.05); }
+#screen-timing.solo .t-body { grid-template-columns: 1fr; }
+
+/* ===== 投屏外观(设置页卡4) ===== */
+.ap-block { margin-bottom: 10px; }
+.ap-block-h { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap;
+  font-size: 13px; font-weight: 700; color: #16332a; margin: 4px 0 8px; }
+.ap-block-h .muted { font-weight: 400; }
+.ap-preview {
+  position: relative; width: 100%; max-width: 660px; aspect-ratio: 16 / 9;
+  margin: 0 auto 10px; border-radius: 10px; overflow: hidden; user-select: none;
+  touch-action: none; cursor: default;
+  background: radial-gradient(900px 460px at 15% -10%, rgba(255,106,77,.16), transparent 55%),
+    radial-gradient(900px 460px at 90% 115%, rgba(90,162,255,.16), transparent 55%),
+    linear-gradient(160deg, #17382e, #10241c 70%);
+  box-shadow: inset 0 0 0 1px rgba(255,255,255,.08);
+}
+.ap-zone { position: absolute; left: 50%; transform: translateX(-50%);
+  color: rgba(255,255,255,.20); pointer-events: none; white-space: nowrap; }
+.ap-stage-zone { top: 38%; font-size: 12px; letter-spacing: 2px; }
+.ap-clock-zone { top: 52%; font-size: 34px; font-weight: 700;
+  transform: translate(-50%, -50%); font-variant-numeric: tabular-nums; }
+.ap-drag {
+  position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%);
+  color: #fff; font-size: 13px; font-weight: 600; white-space: nowrap;
+  padding: 3px 10px; border-radius: 999px; cursor: grab; z-index: 2;
+  touch-action: none; user-select: none;
+  background: rgba(255,255,255,.12); border: 1px dashed rgba(255,255,255,.5);
+  text-shadow: 0 1px 4px rgba(0,0,0,.6);
+}
+.ap-drag.dragging { cursor: grabbing; background: rgba(255,255,255,.24); border-style: solid; }
+.ap-drag-topic { border-color: rgba(255,170,150,.7); }
+.ap-drag-teams { background: rgba(90,162,255,.16); border-color: rgba(140,195,255,.7); }
+.ap-chips-row { display: flex; align-items: center; flex-wrap: wrap; gap: 6px;
+  margin: 2px 0 7px; font-size: 13px; color: #45574f; }
+.ap-chips { display: inline-flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+.ap-chips-row .ap-chips-label { color: #45574f; }
+.ap-chip { border: 1px solid #cbbfa8; background: #fff; border-radius: 999px;
+  padding: 3px 10px; font-size: 12px; cursor: pointer; color: #243a32; }
+.ap-chip:hover { filter: brightness(.96); }
+.ap-chip.sel { border-color: var(--aff); background: #fff0ea; color: #a33a1e; font-weight: 600; }
+.ap-style-h { font-size: 13px; font-weight: 700; color: #16332a; margin: 8px 0 6px; }
+.ap-style-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(232px, 1fr)); gap: 8px; }
+.ap-srow { display: flex; align-items: center; gap: 8px; border: 1px solid var(--line);
+  border-radius: 9px; padding: 6px 9px; background: #fbfaf5; }
+.ap-srow .ap-sname { flex: none; width: 62px; font-size: 12px; color: #243a32; }
+.ap-srow input[type=color] { flex: none; width: 30px; height: 25px; padding: 0;
+  border: 1px solid var(--line); border-radius: 5px; background: #fff; cursor: pointer; }
+.ap-srow input[type=color]::-webkit-color-swatch-wrapper { padding: 1px; }
+.ap-srow input[type=color]::-webkit-color-swatch { border: none; border-radius: 3px; }
+.ap-srow input[type=range] { flex: 1; min-width: 60px; accent-color: #1e7a55; }
+.ap-srow .ap-sval { flex: none; width: 34px; text-align: right; font-size: 11px; color: var(--muted); }
+.ap-srow .ap-restore { flex: none; background: none; border: none; padding: 0;
+  color: var(--muted); cursor: pointer; font-size: 11px; text-decoration: underline; }
+.ap-srow .ap-restore:hover { color: var(--danger); }
+label.ap-chk { flex-direction: row; align-items: center; gap: 6px;
+  font-size: 13px; color: #243a32; display: inline-flex; }
+#ap-msg { font-size: 12px; }
+
+/* ===== 用户自定义布局:辩题/队伍名脱离 .t-head 锚整屏 =====
+   仅当外观有自定义位置时,app.js 会给 #screen-timing 加 .userpos;
+   默认无此 class → 上面所有现有时计规则原样生效,视觉零改动。 */
+#screen-timing.userpos .t-head { display: contents; }
+#screen-timing.userpos #t-topic,
+#screen-timing.userpos .t-teams {
+  position: absolute; left: 0; right: 0; width: 100%;
+  margin: 0; padding: 0; pointer-events: none;
+  color: #fff; text-shadow: 0 1px 8px rgba(0,0,0,.7);
+  text-align: center; line-height: 1.4;
+}
+#screen-timing.userpos .t-teams { display: grid; grid-template-columns: 1fr 1fr; gap: 6vw; }
+
+/* ===== 内置背景预设:live 层与缩略图共用同一套变量 ===== */
+.bg-layer.preset-blue { background: var(--bg-blue); }
+.bg-layer.preset-purple { background: var(--bg-purple); }
+.art-thumb.th-blue { background: var(--bg-blue) center/cover; }
+.art-thumb.th-purple { background: var(--bg-purple) center/cover; }
+.bgp-row { display: flex; align-items: center; gap: 5px; flex-wrap: wrap; margin-top: 2px; }
+.bgp-row .ap-chips { gap: 4px; }
+.ap-chips-label { color: #45574f; font-size: 12px; margin-right: 2px; }
+.bgp-row .ap-chip { padding: 2px 8px; font-size: 11px; }
+
+/* ===== 版本管理(每份完整配置=一个版本) ===== */
+.ver-list { display: flex; flex-direction: column; gap: 8px; margin-bottom: 10px; }
+.ver-empty { color: var(--muted); font-size: 13px; padding: 4px 2px; }
+.ver-item { display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
+  border: 1px solid var(--line); background: #fff; border-radius: 10px; padding: 7px 10px; }
+.ver-item.sel { border-color: var(--aff); background: #fff7f2; }
+.ver-main { flex: 1 1 180px; min-width: 0; display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; }
+.ver-name { font-weight: 600; color: #243a32; }
+.ver-upd { font-size: 11px; color: var(--muted); }
+.ver-dirty { font-size: 11px; color: #b9770e; }
+.ver-actions { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.ver-go { background: var(--aff); border: 1px solid var(--aff); color: #fff;
+  border-radius: 7px; padding: 5px 10px; font-size: 12px; cursor: pointer; }
+.ver-go:hover { filter: brightness(.96); }
+
+/* ===== 首页底部帮助卡(使用方法 / 转发) ===== */
+.help-card { padding: 10px 14px; }
+.help-box summary { cursor: pointer; font-weight: 600; color: #243a32;
+  list-style: none; user-select: none; }
+.help-box summary::-webkit-details-marker { display: none; }
+.help-box summary::before { content: '▸ '; color: var(--aff); }
+.help-box[open] summary::before { content: '▾ '; }
+.help-list { margin: 10px 0 2px; padding-left: 2px; list-style: none;
+  color: #44574f; font-size: 13px; line-height: 1.75; }
+.help-list li { margin-bottom: 8px; padding-left: 14px; position: relative; }
+.help-list li::before { content: '·'; position: absolute; left: 2px; color: var(--aff); }
+.help-list b { color: #243a32; font-weight: 600; }
+.help-list code { background: rgba(0,0,0,.06); border-radius: 4px;
+  padding: 1px 5px; font-family: inherit; font-size: 12px; }
+
+/* ===== 编辑器:内容环节行(图文/文字) ===== */
+.stage-hint { margin-top: 6px; line-height: 1.6; }
+.stage-tbl .cell-name { display: inline-flex; align-items: center; gap: 6px; width: 100%; }
+.stage-tbl .cell-name input { flex: 1 1 90px; }
+.stage-tbl .c-edit { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.stage-tbl textarea { border: 1px solid var(--line); border-radius: 7px; padding: 6px 9px;
+  font-size: 13px; font-family: inherit; resize: vertical; }
+.stage-thumb { width: 96px; height: 58px; flex: none; }
+.row-chips .ap-chip { padding: 2px 8px; font-size: 11px; }
+.c-edit .muted { max-width: 220px; line-height: 1.5; }
+tr.row-content > td { background: #fbfaf4; }
+
+/* ===== 投屏:内容环节(图文整幅 / 文字)呈现于计时屏内 ===== */
+.slide-layer {
+  position: absolute; inset: 0; z-index: 1;
+  display: none; align-items: center; justify-content: center;
+  padding: 6vh 7vw; color: #fff; text-align: center;
+  pointer-events: none; overflow: hidden;
+}
+#screen-timing.content-mode .slide-layer { display: flex; }
+/* 内容环节盖掉时钟卡;图文环节连顶部辩题/队名一并盖掉(整幅图占满屏) */
+#screen-timing.content-mode .t-midflex { display: none !important; }
+#screen-timing.content-img .t-head { display: none !important; }
+/* 纯文字环节保留顶部辩题/队名,文字区下移避开页头 */
+#screen-timing.content-text .slide-layer { top: 20vh; bottom: 4vh; }
+.content-msg {
+  white-space: pre-wrap; word-break: break-word; overflow-wrap: anywhere;
+  font-size: calc(clamp(30px, 5vw, 104px) * var(--txt-scale, 1));
+  line-height: 1.5; font-weight: 700; max-width: 86vw;
+  text-shadow: 0 2px 14px rgba(0,0,0,.75);
+}
+
+
+</style>
+</head>
+<body>
+
+  <!-- ============ 设置 / 编辑 ============ -->
+  <section id="screen-setup" class="screen active">
+    <div class="setup-scroll">
+      <h1 class="setup-title">辩论赛计时器</h1>
+
+      <div class="card">
+        <div class="card-h"><span>1 · 我的比赛版本</span>
+          <span class="muted" id="ver-open"></span></div>
+        <div class="ver-list" id="version-list"></div>
+        <div class="btnrow">
+          <button id="btn-ver-new" class="btn" type="button">＋ 新建空白版本</button>
+          <label class="btn btn-file">导入版本 JSON<input id="file-ver-import" type="file" accept=".json,application/json" hidden /></label>
+        </div>
+        <div class="muted">每个版本 = 一份完整配置(赛制 + 比赛信息 + 计时背景 + 投屏外观;封面/结束等整幅图就排在赛制的图文环节行里),互不覆盖。底部「保存为版本」把当前整份存下;▶ 用该版本直接开赛,「修改」载入继续编辑。</div>
+      </div>
+
+      <div class="card">
+        <div class="card-h"><span>2 · 选择或编辑赛制</span>
+          <span class="muted" id="working-source"></span></div>
+        <div class="row-list" id="format-list"></div>
+        <div class="muted">点击即载入为「可编辑副本」,改动需另存为我的赛制;内置不会被覆盖。</div>
+      </div>
+
+      <div class="card">
+        <div class="card-h"><span>3 · 逐环节编辑</span>
+          <span class="muted">改名 / 选类型 / 填时长,均可</span></div>
+        <div class="meta-line">
+          <label>赛制名 <input id="fmt-name" type="text" maxlength="30" placeholder="我的赛制" /></label>
+          <label>警告提示
+            <select id="fmt-warning">
+              <option value="10">10 秒前</option>
+              <option value="20">20 秒前</option>
+              <option value="30" selected>30 秒前</option>
+              <option value="60">60 秒前</option>
+              <option value="0">关闭</option>
+            </select></label>
+          <button id="btn-allpool" class="btn btn-small">全部改为预算共用</button>
+        </div>
+        <div id="budget-line" class="meta-line hidden">
+          <label>每队总预算(预算共用时) 正方
+            <input id="pool-aff" type="text" value="18:00" /></label>
+          <label>反方 <input id="pool-neg" type="text" value="18:00" /></label>
+        </div>
+
+        <table class="stage-tbl" id="stage-tbl">
+          <thead><tr>
+            <th class="c-num">#</th><th>环节名</th><th>类型</th><th>正方时长</th>
+            <th>反方时长</th><th>先手</th><th class="c-ops">操作</th>
+          </tr></thead>
+          <tbody id="stage-rows"></tbody>
+        </table>
+        <div class="btnrow wrap">
+          <button id="btn-add" class="btn">＋ 计时环节</button>
+          <button id="btn-add-img" class="btn">＋ 图片环节</button>
+          <button id="btn-add-text" class="btn">＋ 文字环节</button>
+          <button id="btn-ins-cover" class="btn btn-small">封面(图文)置首</button>
+          <button id="btn-append-end" class="btn btn-small">结束(图文)追加</button>
+        </div>
+        <div class="muted stage-hint">图片环节 = 全屏一整幅图(封面 / 结束用,每行可各自上传一张);文字环节 = 计时页背景 + 居中文字,顶部仍显示辩题与队名。内容环节不倒数,点「上一环 / 下一环」像翻页一样推进。</div>
+
+        <div class="btnrow">
+          <button id="btn-save" class="btn btn-primary">存为我的赛制</button>
+          <button id="btn-export" class="btn">导出 JSON</button>
+          <label class="btn btn-file">导入 JSON<input id="file-import" type="file" accept="application/json,.json" hidden /></label>
+          <button id="btn-del-custom" class="btn btn-danger">删除所选自定义</button>
+        </div>
+        <div id="edit-msg" class="muted"></div>
+      </div>
+
+      <div class="card">
+        <div class="card-h"><span>4 · 比赛信息与画面</span></div>
+        <div class="meta-grid">
+          <label>赛事名 <input id="set-event" type="text" maxlength="40" placeholder="如:第三届华语辩论赛" /></label>
+          <label>辩题 <input id="set-topic" type="text" maxlength="80" placeholder="正方应……" /></label>
+          <label>正方队伍名 <input id="set-aff" type="text" maxlength="20" placeholder="正方" /></label>
+          <label>反方队伍名 <input id="set-neg" type="text" maxlength="20" placeholder="反方" /></label>
+        </div>
+        <div class="art-grid">
+          <div class="art-slot">
+            <div class="art-thumb" id="art-timer-thumb"></div>
+            <label class="btn btn-file">上传计时背景<input id="file-timer" type="file" accept="image/*" hidden /></label>
+            <button class="btn btn-small" data-art-reset="timer">清除</button>
+            <div class="bgp-row"><span class="ap-chips-label">内置</span><span class="ap-chips" id="bgp-timer"></span></div>
+          </div>
+        </div>
+        <div class="muted">此背景用于所有计时环节与「文字环节」;封面 / 结束等图文页请到「3 · 逐环节编辑」里对该行单独上传整幅图(每行各传一张),行内也可改用内置底色。</div>
+      </div>
+
+      <div class="card">
+        <div class="card-h"><span>5 · 投屏外观(可选)</span>
+          <span class="muted">只作用于比赛大屏,全局记忆,可一键恢复默认</span></div>
+
+        <div class="ap-block">
+          <div class="ap-block-h"><span>辩题 / 队伍名位置</span>
+            <span class="muted">在下方假屏上拖动即可;中央灰带为计时区,不可覆盖</span></div>
+          <div class="ap-preview" id="ap-preview">
+            <div class="ap-zone ap-stage-zone" id="ap-zone-stage">环节示例</div>
+            <div class="ap-zone ap-clock-zone" id="ap-zone-clock">0:00</div>
+            <div class="ap-drag ap-drag-topic" id="ap-drag-topic">辩题文字(示例)</div>
+            <div class="ap-drag ap-drag-teams" id="ap-drag-teams">正方 · 示例队</div>
+          </div>
+          <div class="ap-chips-row">
+            <span class="ap-chips" id="ap-preset-topic"></span>
+          </div>
+          <div class="ap-chips-row">
+            <span class="ap-chips" id="ap-preset-teams"></span>
+          </div>
+        </div>
+
+        <div class="ap-style-h">文字样式(颜色 / 字号,字号随屏幕缩放)</div>
+        <div class="ap-style-grid" id="ap-style-rows"></div>
+
+        <div class="btnrow">
+          <label class="ap-chk"><input type="checkbox" id="ap-shadow" /> 文字投影(浅色背景看不清时可关)</label>
+          <button id="btn-ap-reset" class="btn btn-danger">恢复默认外观</button>
+          <span class="muted" id="ap-msg"></span>
+        </div>
+      </div>
+
+      <div class="setup-foot">
+        <button id="btn-ver-save" class="btn btn-primary" type="button">保存为版本</button>
+        <button id="btn-start" class="btn btn-start">开始比赛 ▶</button>
+        <div id="setup-msg" class="muted"></div>
+      </div>
+
+      <!-- ============ 底部帮助:如何打开 / 转发给别人 ============ -->
+      <div class="card help-card">
+        <details class="help-box">
+          <summary>如何使用 · 转发给他人 / 换台电脑(点开)</summary>
+          <ul class="help-list">
+            <li><b>打开 / 自己用:</b>双击 <b>辩论赛计时器.html</b> 即可,无需安装任何东西。</li>
+            <li><b>转发工具本身:</b>只需把 <b>辩论赛计时器.html</b> 这一个文件发给对方即可。用微信 / QQ 发送时,如果对方无法接收 .html 文件,可先压缩成 zip 再发送;对方解压后双击即可。</li>
+            <li><b>只发 html,对方是从零开始:</b>每个人的版本、上传的背景、外观只保存在<b>当前这台电脑的浏览器</b>里(不联网、不上传)。对方只拿到 html 时需自行配置赛制与比赛信息(但内置赛制可直接选用)。</li>
+            <li><b>想把「整套配好的比赛」一起发过去:</b>在卡片「1 · 我的比赛版本」找到对应那一行,点它的「导出」,浏览器会下载一个 <code>名字.json</code>;把这个 json 连同 html 一起发给对方。对方打开 html 后,在卡片 1 底部点「导入版本 JSON」选该文件,赛制、赛事名、辩题、队伍名、背景图、投屏外观会<b>全部还原</b>。</li>
+            <li><b>备份 / 换电脑:</b>重要版本随时可用「导出」留档;换电脑或重装浏览器后,用「导入版本 JSON」即可恢复。</li>
+          </ul>
+        </details>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ 投屏(唯一):计时 / 图文 / 文字 三种形态由环节类型切换 ============ -->
+  <section id="screen-timing" class="screen">
+    <div class="bg-layer" id="timer-bg"></div>
+    <div class="t-head">
+      <div class="t-topic" id="t-topic"></div>
+      <div class="t-teams">
+        <div class="t-side aff" id="name-aff"></div>
+        <div class="t-side neg" id="name-neg"></div>
+      </div>
+    </div>
+    <div class="t-midflex">
+      <div class="t-stage" id="t-stage"></div>
+      <div class="t-body" id="t-body">
+        <div class="team-cell aff" id="card-aff">
+          <div class="team-time" id="time-aff">0:00</div>
+          <div class="team-state" id="state-aff"></div>
+        </div>
+        <div class="team-cell neg" id="card-neg">
+          <div class="team-time" id="time-neg">0:00</div>
+          <div class="team-state" id="state-neg"></div>
+        </div>
+      </div>
+    </div>
+    <div class="slide-layer" id="slide-layer">
+      <div class="content-msg" id="content-msg"></div>
+    </div>
+  </section>
+
+  <!-- 全局右下角操作栏(设置/投屏共用;悬停展开) -->
+  <div id="ops-root" class="ops-root hidden"></div>
+
+  <div id="toast" class="toast hidden"></div>
+
+  <script>
+// 辩论赛计时器 · 计时引擎(纯函数状态机,无 DOM)
+// 三种环节类型(statement/cross-exam/free-debate)共用同构引擎:
+//   每环节 正/反 各一钟,同一时刻仅一个钟在走(active),操作员换边切换。
+// fixed:进环节时该方剩余 = 环节名义时长;pool:进环节时 = 全队预算(跨环节沿承)。
+// 精度:仅在 start/pause 等动作改写 remaining;运行中由 deadline(绝对截止)推导,EVAL 收敛。
+// dispatch(state, action, nowMs) -> { state, cues };nowMs 显式传入以便确定性测试。
+(function (root) {
+  'use strict';
+  const SIDES = ['aff', 'neg'];
+  const WARN_DEFAULT = 30;
+
+  const isPoolStage = (s) => s.mode === 'pool';
+  const clamp = (n, lo, hi) => Math.max(lo, Math.min(hi, n));
+
+  // ---------- 时钟 ----------
+  // status: paused | running | finished | inactive(该环节无此方)
+  function freshClock(remainingMs, absentAsFinished) {
+    if (remainingMs <= 0) return {
+      remainingMs: 0, status: absentAsFinished ? 'finished' : 'inactive',
+      deadlineMs: null, fired: { warning: false, end: false }, warnArmed: false,
+    };
+    return {
+      remainingMs, status: 'paused', deadlineMs: null,
+      fired: { warning: false, end: false }, warnArmed: false,
+    };
+  }
+
+  function seedClockFor(state, idx, side) {
+    const stage = state.format.stages[idx];
+    if (isPoolStage(stage)) {
+      const b = state.budget[side];                 // 沿承全队预算
+      return freshClock(b, true);                   // 预算耗尽→finished(便于跨环节提示)
+    }
+    const sec = side === 'aff' ? stage.affSec : stage.negSec;
+    return freshClock(sec * 1000, false);           // 名义 0→inactive(本环节无此方)
+  }
+
+  function enterStage(state, idx) {
+    const stage = state.format.stages[idx];
+    state.idx = idx;
+    state.clocks = {};
+    for (const side of SIDES) {
+      state.clocks[side] = seedClockFor(state, idx, side);
+      state.segmentStart[side] = state.clocks[side].remainingMs;
+    }
+    state.active = pickActive(state.clocks, stage);
+  }
+
+  function pickActive(clocks, stage) {
+    const lead = stage.leadSide === 'neg' ? 'neg' : 'aff';
+    const other = lead === 'neg' ? 'aff' : 'neg';
+    if (clocks[lead].remainingMs > 0) return lead;
+    if (clocks[other].remainingMs > 0) return other;
+    return null;
+  }
+
+  // 池环节把当前剩余写回全场预算
+  function writebackBudget(state, side) {
+    if (isPoolStage(state.format.stages[state.idx])) {
+      state.budget[side] = state.clocks[side].remainingMs;
+    }
+  }
+
+  function start(state, side, nowMs) {
+    const c = state.clocks[side];
+    if (!c || c.status === 'running' || c.remainingMs <= 0) return;
+    c.warnArmed = c.remainingMs > WARN_DEFAULT * 1000;  // 短于警告阈值的环节不响警告
+    c.deadlineMs = nowMs + c.remainingMs;
+    c.status = 'running';
+    state.active = side;
+  }
+
+  function pause(state, side, nowMs) {
+    const c = state.clocks[side];
+    if (!c || c.status !== 'running') return;
+    const rem = Math.max(0, c.deadlineMs - nowMs);
+    c.remainingMs = rem;
+    c.deadlineMs = null;
+    c.status = rem > 0 ? 'paused' : 'finished';
+    // 暂停不清空选中侧:暂停后“开始”即可续走;归零由 settle 清空
+    writebackBudget(state, side);
+  }
+
+  // 结算一个运行中的钟:推导剩余、触发跨阈值提示、归零置 finished
+  function settle(state, side, nowMs) {
+    const c = state.clocks[side];
+    if (c.status !== 'running') return [];
+    const cues = [];
+    const rem = c.deadlineMs - nowMs;
+    if (rem <= WARN_DEFAULT * 1000 && rem > 0 && c.warnArmed && !c.fired.warning) {
+      c.fired.warning = true;
+      cues.push({ side, type: 'warning' });
+    }
+    if (rem <= 0) {
+      c.remainingMs = 0;
+      c.deadlineMs = null;
+      if (!c.fired.end) { c.fired.end = true; cues.push({ side, type: 'end' }); }
+      c.status = 'finished';
+      if (state.active === side) state.active = null;
+    } else {
+      c.remainingMs = rem;
+    }
+    writebackBudget(state, side);
+    return cues;
+  }
+
+  // ---------- 状态创建 / 动作 ----------
+  function create(format) {
+    const stages = (format.stages || []).slice();
+    if (!stages.length) return { empty: true };
+    const norm = Object.assign({}, format, {
+      stages,
+      warningSec: format.warningSec == null ? WARN_DEFAULT : format.warningSec,
+    });
+    const budget0 = {
+      aff: (norm.poolPerSideSec && norm.poolPerSideSec.aff || 0) * 1000,
+      neg: (norm.poolPerSideSec && norm.poolPerSideSec.neg || 0) * 1000,
+    };
+    const state = {
+      format: norm, idx: 0,
+      budget: { aff: budget0.aff, neg: budget0.neg },  // 全队池预算(权威值)
+      budget0,                                          // RESET_ALL 的回满基准
+      clocks: null, active: null,
+      segmentStart: { aff: 0, neg: 0 },
+    };
+    enterStage(state, 0);
+    return state;
+  }
+
+  function resetStage(state, nowMs) {
+    if (state.active) pause(state, state.active, nowMs);
+    const idx = state.idx;
+    state.clocks = {};
+    for (const side of SIDES) {
+      const rem = state.segmentStart[side];           // fixed→名义值;pool→进环节时的预算(撤销本段消耗)
+      state.clocks[side] = isPoolStage(state.format.stages[idx])
+        ? freshClock(rem, true) : freshClock(rem, false);
+      writebackBudget(state, side);
+    }
+    state.active = pickActive(state.clocks, state.format.stages[idx]);
+  }
+
+  function resetAll(state) {
+    state.budget = { aff: state.budget0.aff, neg: state.budget0.neg };
+    enterStage(state, 0);
+  }
+
+  function anyRunning(state) {
+    return SIDES.some((side) => state.clocks[side].status === 'running');
+  }
+
+  function dispatch(prev, action, nowMs) {
+    if (prev.empty) return { state: prev, cues: [] };
+    const t = action.type;
+    // 无运行钟时 EVAL 无任何效果:原引用直接返回,便于 UI 跳过重渲染
+    if (t === 'EVAL' && !anyRunning(prev)) return { state: prev, cues: [] };
+    const state = cloneState(prev);
+    const cues = [];
+    const cur = () => state.format.stages[state.idx];
+
+    switch (t) {
+      case 'EVAL':
+        for (const side of SIDES) cues.push.apply(cues, settle(state, side, nowMs));
+        break;
+      case 'START': start(state, state.active, nowMs); break;
+      case 'PAUSE': if (state.active) pause(state, state.active, nowMs); break;
+      case 'TOGGLE':
+        if (state.active && state.clocks[state.active].status === 'running') pause(state, state.active, nowMs);
+        else start(state, state.active, nowMs);
+        break;
+      case 'SWITCH': {
+        const side = action.side;
+        if (side !== 'aff' && side !== 'neg') break;
+        const wasRunning = !!(state.active && state.clocks[state.active].status === 'running');
+        if (state.active && state.active !== side) pause(state, state.active, nowMs);
+        if (state.clocks[side].remainingMs <= 0) break;           // 目标已无时间/本环节无此方
+        state.active = side;
+        if (wasRunning && state.clocks[side].status === 'paused') start(state, side, nowMs); // 接棒续跑
+        break;
+      }
+      case 'NEXT': case 'PREV': case 'SET_STAGE': {
+        const target = t === 'NEXT' ? state.idx + 1
+          : t === 'PREV' ? state.idx - 1
+          : clamp(action.index | 0, 0, state.format.stages.length - 1);
+        const ni = clamp(target, 0, state.format.stages.length - 1);
+        if (ni === state.idx) return { state: prev, cues: [] }; // 无操作,不打扰进行中的钟
+        if (state.active) pause(state, state.active, nowMs);
+        enterStage(state, ni);
+        break;
+      }
+      case 'RESET_STAGE': resetStage(state, nowMs); break;
+      case 'RESET_ALL': resetAll(state); break;
+      default: break;
+    }
+    if (!state.active) state.active = pickActive(state.clocks, cur());
+    return { state, cues };
+  }
+
+  // 运行中钟的即时剩余(高帧渲染用,不改状态;暂停/未开始返回已存值)
+  function remainingMs(state, side, nowMs) {
+    const c = state.clocks[side];
+    if (c.status === 'running') return Math.max(0, c.deadlineMs - nowMs);
+    return c.remainingMs;
+  }
+
+  function cloneState(prev) {
+    const s = {
+      format: prev.format, idx: prev.idx,
+      budget: { aff: prev.budget.aff, neg: prev.budget.neg },
+      budget0: prev.budget0,
+      active: prev.active,
+      segmentStart: { aff: prev.segmentStart.aff, neg: prev.segmentStart.neg },
+      clocks: {},
+    };
+    for (const side of SIDES) {
+      const c = prev.clocks[side];
+      s.clocks[side] = {
+        remainingMs: c.remainingMs, status: c.status, deadlineMs: c.deadlineMs,
+        fired: { warning: c.fired.warning, end: c.fired.end },
+        warnArmed: c.warnArmed,
+      };
+    }
+    return s;
+  }
+
+  const API = { create, dispatch, remainingMs, resetStage, resetAll, SIDES, WARN_DEFAULT };
+  if (typeof module !== 'undefined' && module.exports) module.exports = API;
+  else root.DebateEngine = API;
+})(typeof self !== 'undefined' ? self : this);
+
+</script>
+  <script>
+// 内置赛制(参考模板)+ 数据校验(纯逻辑,node 安全可测)
+// 内置数据一律只读:编辑器只能以"可编辑副本"方式载入,禁止直接改 builtin。
+(function (root) {
+  'use strict';
+  // 类型分两组:计时(有钟,驱动 UI) 与 内容(无钟,fixed+0/0,图文/文字/封面/结束)
+  const TIMED_TYPES = ['statement', 'cross-exam', 'free-debate'];
+  const CONTENT_TYPES = ['image', 'text'];
+  const TYPES = TIMED_TYPES.concat(CONTENT_TYPES);
+  const MODES = ['fixed', 'pool'];
+  const SIDES = ['aff', 'neg'];
+  const MAX_SEC = 90 * 60; // 单环节上限 90 分钟,防误填
+  const MIN_MS_STR = (t, s) => `${t} · ${s}`;
+  const clampNum = (n, lo, hi) => Math.min(hi, Math.max(lo, n));
+  const CONTENT_LABEL = { image: '图文', text: '文字' };
+
+  // 行构造简写:type 段=一个发言方的动作;非发言方 0(无钟)
+  function seg(type, title, sec, side, lead) {
+    return {
+      title, type, mode: 'fixed',
+      affSec: side === 'aff' ? sec : 0,
+      negSec: side === 'neg' ? sec : 0,
+      leadSide: lead || side,
+    };
+  }
+  function poolSeg(type, title, lead) {
+    return { title, type, mode: 'pool', affSec: 0, negSec: 0, leadSide: lead || 'aff' };
+  }
+  // 内容环节构造:引擎结构恒为 fixed + 0/0 + lead aff(无钟、不碰预算),外加各自负载
+  function contentSeg(type, title, over) {
+    const o = Object.assign({}, over || {});
+    const base = { title, type, mode: 'fixed', affSec: 0, negSec: 0, leadSide: 'aff' };
+    if (type === 'image') {
+      base.imageData = (typeof o.imageData === 'string' && o.imageData) ? o.imageData : null;
+      base.bg = (o.bg === 'blue' || o.bg === 'purple') ? o.bg : null;
+    } else if (type === 'text') {
+      base.text = typeof o.text === 'string' ? o.text : '';
+      base.textSize = Number.isFinite(o.textSize) ? clampNum(o.textSize, 0.5, 2) : 1;
+    }
+    return base;
+  }
+  // 内容行归一化(固定语义):任何入口(载入/导入/copyOf)都过这里,保证引擎只看 fixed 0/0
+  function normalizeStage(st) {
+    if (!st || typeof st !== 'object') return st;
+    if (CONTENT_TYPES.indexOf(st.type) < 0) return st;   // 计时/未知类型原样返回(不复制)
+    const s = Object.assign({}, st);
+    s.mode = 'fixed'; s.affSec = 0; s.negSec = 0;
+    s.leadSide = s.leadSide === 'neg' ? 'neg' : 'aff';
+    if (s.type === 'image') {
+      s.imageData = (typeof s.imageData === 'string' && s.imageData) ? s.imageData : null;
+      s.bg = (s.bg === 'blue' || s.bg === 'purple') ? s.bg : null;
+    } else if (s.type === 'text') {
+      if (typeof s.text !== 'string') s.text = '';
+      const n = Number(s.textSize);
+      s.textSize = Number.isFinite(n) ? clampNum(n, 0.5, 2) : 1;
+    }
+    return s;
+  }
+  const isContent = (st) => !!(st && CONTENT_TYPES.indexOf(st.type) >= 0);
+
+  // ---------- 华语辩论世界杯(参考模板;时长以当届官方为准,可编辑) ----------
+  const worldCup = {
+    name: '华语辩论世界杯(参考模板)',
+    builtin: true,
+    poolPerSideSec: { aff: 0, neg: 0 },
+    warningSec: 30,
+    stages: [
+      contentSeg('image', '封面'),
+      seg('statement', '正方一辩开篇立论', 210, 'aff', 'aff'),
+      seg('statement', '反方一辩开篇立论', 210, 'neg', 'neg'),
+      seg('cross-exam', '反方二辩质询正方一辩', 120, 'neg', 'neg'),
+      seg('cross-exam', '正方二辩质询反方一辩', 120, 'aff', 'aff'),
+      seg('statement', '反方二辩质询小结', 90, 'neg', 'neg'),
+      seg('statement', '正方二辩质询小结', 90, 'aff', 'aff'),
+      { title: '四辩对辩', type: 'free-debate', mode: 'fixed', affSec: 90, negSec: 90, leadSide: 'aff' },
+      seg('cross-exam', '反方三辩盘问', 120, 'neg', 'neg'),
+      seg('cross-exam', '正方三辩盘问', 120, 'aff', 'aff'),
+      seg('statement', '反方三辩盘问小结', 90, 'neg', 'neg'),
+      seg('statement', '正方三辩盘问小结', 90, 'aff', 'aff'),
+      { title: '自由辩论', type: 'free-debate', mode: 'fixed', affSec: 240, negSec: 240, leadSide: 'aff' },
+      seg('statement', '反方四辩总结陈词', 210, 'neg', 'neg'),
+      seg('statement', '正方四辩总结陈词', 210, 'aff', 'aff'),
+      contentSeg('image', '结束'),
+    ].map(idMap()),
+  };
+
+  // ---------- 国际华语辩论邀请赛(新国辩;预算池制,2025 起每队 18 分钟) ----------
+  const newGuoBian = {
+    name: '国际华语辩论邀请赛(新国辩)',
+    builtin: true,
+    poolPerSideSec: { aff: 18 * 60, neg: 18 * 60 }, // 每队 18:00,除自由辩论外共用
+    warningSec: 30,
+    stages: [
+      contentSeg('image', '封面'),
+      poolSeg('statement', '陈词1(双方一辩)', 'aff'),
+      poolSeg('cross-exam', '质询1(四辩质对方一辩)', 'neg'),
+      poolSeg('statement', '陈词2(双方二辩)', 'aff'),
+      poolSeg('cross-exam', '质询2(三辩质对方二辩)', 'neg'),
+      poolSeg('statement', '质询小结(双方三辩)', 'neg'),
+      { title: '自由辩论', type: 'free-debate', mode: 'fixed', affSec: 240, negSec: 240, leadSide: 'aff' },
+      poolSeg('statement', '总结陈词(双方四辩,结辩≥3分钟)', 'aff'),
+      contentSeg('image', '结束'),
+    ].map(idMap()),
+  };
+
+  function idMap() {
+    let i = 0;
+    return (s) => Object.assign({}, s, { id: String(i++) });
+  }
+
+  // ---------- 校验 ----------
+  function errs(msg) { return { ok: false, errors: [msg] }; }
+
+  function validate(format) {
+    if (!format || typeof format !== 'object') return errs('赛制数据不是对象');
+    const errors = [];
+    const push = (m) => errors.push(m);
+    if (typeof format.name !== 'string' || !format.name.trim()) push('赛制缺少名称');
+    const stages = format.stages;
+    if (!Array.isArray(stages) || !stages.length) push('环节不能为空');
+    let anyPool = false;
+    (stages || []).forEach((st, i) => {
+      const at = `第 ${i + 1} 行`;
+      if (!st || typeof st !== 'object') return push(`${at}:无效`);
+      if (typeof st.title !== 'string' || !st.title.trim()) push(`${at}:缺环节名`);
+      const content = CONTENT_TYPES.indexOf(st.type) >= 0;
+      const timed = TIMED_TYPES.indexOf(st.type) >= 0;
+      if (!timed && !content) push(`${at}:类型须为 计时(陈词/质询/对辩) 或 内容(图文/文字) 之一`);
+      else if (content) {
+        if (st.mode != null && st.mode !== 'fixed') push(`${at}:内容环节(图文/文字)只可固定,不可设为预算共用`);
+        for (const side of SIDES) {
+          const v = st[side === 'aff' ? 'affSec' : 'negSec'];
+          if (v != null && v !== 0) push(`${at}:内容环节不需要时长,该侧需为 0`);
+        }
+        if (st.type === 'image') {
+          if (st.imageData != null && typeof st.imageData !== 'string') push(`${at}:图片数据无效`);
+          if (st.bg != null && st.bg !== 'blue' && st.bg !== 'purple') push(`${at}:内置底色无效`);
+        } else if (st.type === 'text') {
+          if (st.text != null && typeof st.text !== 'string') push(`${at}:文字内容需为文本`);
+          if (st.textSize != null && (!Number.isFinite(st.textSize) || st.textSize < 0.5 || st.textSize > 2)) push(`${at}:字号档需在 0.5~2`);
+        }
+      } else {
+        if (MODES.indexOf(st.mode) < 0) push(`${at}:计时方式须为 固定/预算 之一`);
+        if (st.mode === 'pool') anyPool = true;
+        for (const side of SIDES) {
+          const v = st[side === 'aff' ? 'affSec' : 'negSec'];
+          if (!Number.isFinite(v) || v < 0 || v > MAX_SEC) push(`${at}:时长需为 0~${MAX_SEC} 秒`);
+        }
+        if (st.leadSide !== 'aff' && st.leadSide !== 'neg') push(`${at}:先手方无效`);
+      }
+    });
+    if (anyPool) {
+      for (const side of SIDES) {
+        const v = format.poolPerSideSec && format.poolPerSideSec[side];
+        if (!Number.isFinite(v) || v <= 0) push('预算共用制需要填写每队总预算(>0)');
+      }
+    }
+    const w = format.warningSec;
+    if (w != null && (!Number.isFinite(w) || w < 0)) push('警告提示秒数无效');
+    return { ok: errors.length === 0, errors };
+  }
+
+  // 深拷贝内置为可编辑副本
+  function copyOf(format) {
+    const copy = JSON.parse(JSON.stringify(Object.assign({}, format, { builtin: false })));
+    if (Array.isArray(copy.stages)) copy.stages = copy.stages.map(normalizeStage);
+    return copy;
+  }
+
+  // 时间字符串互转(mm:ss 或纯秒),编辑/展示共用
+  function parseSec(text) {
+    const t = String(text == null ? '' : text).trim();
+    if (t === '') return NaN;
+    if (/^\d+(\.\d+)?$/.test(t)) return Number(t);            // 纯秒
+    const m = t.match(/^(\d{1,3})[:：](\d{1,2})(?:\.(\d{1,2}))?$/);
+    if (m) return Number(m[1]) * 60 + Number(m[2]) + (m[3] ? Number('0.' + m[3]) : 0);
+    return NaN;
+  }
+  function fmtSec(sec) {
+    if (!Number.isFinite(sec) || sec < 0) return '0:00';
+    const s = Math.round(sec);
+    const mm = Math.floor(s / 60);
+    const ss = s % 60;
+    return mm + ':' + String(ss).padStart(2, '0');
+  }
+
+  const API = { BUILTINS: [worldCup, newGuoBian], validate, copyOf, parseSec, fmtSec,
+                TYPES, MODES, SIDES, TIMED_TYPES, CONTENT_TYPES,
+                contentSeg, normalizeStage, isContent, CONTENT_LABEL };
+  if (typeof module !== 'undefined' && module.exports) module.exports = API;
+  else root.Presets = API;
+})(typeof self !== 'undefined' ? self : this);
+
+</script>
+  <script>
+// 辩论赛计时器 · 投屏外观(纯逻辑,node 安全可测)
+// 定义「投屏外观」默认值、归一化与字号换算;不含 DOM / localStorage。
+// 一份外观 = 辩题/队伍名 的位置(pos) + 五组文字的颜色/字号(style) + 投影开关。
+// 铁律:全为默认时不产生任何 inline/类 → 计时屏视觉与改动前逐像素一致。
+(function (root) {
+  'use strict';
+
+  // 各组默认字号(= 现 style.css 生效值):clamp(min px, vw vw, max px)
+  // 用户缩放因子 s 时:三端点同乘 → 曲线不变、仍随屏缩放。
+  const FONTS = {
+    topic: { min: 22, vw: 4, max: 52 },
+    teams: { min: 22, vw: 4, max: 52 },
+    stage: { min: 20, vw: 3, max: 46 },
+    time:  { min: 64, vw: 15, max: 210 },
+    state: { min: 13, vw: 1.8, max: 20 },
+  };
+  const GROUPS = ['topic', 'teams', 'stage', 'time', 'state'];
+  const ALIGNS = ['left', 'center', 'right'];
+  const DEFAULT_COLOR = '#ffffff';
+  const SIZE_MIN = 0.5, SIZE_MAX = 2;
+
+  const newStyle = () => ({ color: DEFAULT_COLOR, size: 1 });
+  const newDefault = () => ({
+    pos: { topic: null, teams: null },
+    style: { topic: newStyle(), teams: newStyle(), stage: newStyle(), time: newStyle(), state: newStyle() },
+    shadow: true,
+  });
+
+  const isHexColor = (v) => typeof v === 'string' && /^#([0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/.test(v);
+  const clamp = (v, lo, hi) => Math.min(hi, Math.max(lo, v));
+  const num = (v, d) => (Number.isFinite(v) ? v : d);
+
+  function normPos(v, hasAlign) {
+    if (v == null || typeof v !== 'object') return null;
+    const y = clamp(Math.round(num(v.y, NaN) * 10) / 10, 0, 100);
+    if (!Number.isFinite(y)) return null;
+    const out = { y };
+    if (hasAlign) out.align = ALIGNS.indexOf(v.align) >= 0 ? v.align : 'center';
+    return out;
+  }
+
+  function normStyle(s) {
+    const o = newStyle();
+    if (s == null || typeof s !== 'object') return o;
+    o.color = isHexColor(s.color) ? String(s.color).toLowerCase() : DEFAULT_COLOR;
+    o.size = clamp(num(s.size, 1), SIZE_MIN, SIZE_MAX);
+    return o;
+  }
+
+  // 归一化:兜底缺省/脏输入;旧数据无键时(raw 为 null)返回全新默认。
+  function normalize(raw) {
+    const out = newDefault();
+    if (raw == null || typeof raw !== 'object') return out;
+    const p = (raw.pos && typeof raw.pos === 'object') ? raw.pos : {};
+    out.pos.topic = normPos(p.topic, true);
+    out.pos.teams = normPos(p.teams, false);
+    const st = (raw.style && typeof raw.style === 'object') ? raw.style : {};
+    GROUPS.forEach((g) => { out.style[g] = normStyle(st[g]); });
+    out.shadow = raw.shadow !== false;
+    return out;
+  }
+
+  // 是否等于默认(决定是否需写 inline / 加 .userpos)
+  function isDefault(ap) {
+    if (ap.pos.topic || ap.pos.teams) return false;
+    if (ap.shadow !== true) return false;
+    return GROUPS.every((g) => {
+      const s = ap.style[g];
+      return s.color === DEFAULT_COLOR && s.size === 1;
+    });
+  }
+
+  function userPosActive(ap) { return !!(ap.pos.topic || ap.pos.teams); }
+
+  // 用户字号因子 → clamp 字符串;因子≈1 返回 null(用样式表默认)
+  function fontCss(key, factor) {
+    const f = FONTS[key];
+    if (!f) return null;
+    if (factor == null || factor === 1) return null;
+    const s = clamp(num(factor, 1), SIZE_MIN, SIZE_MAX);
+    const r = (v) => Math.round(v * 10) / 10;
+    return 'clamp(' + r(f.min * s) + 'px,' + r(f.vw * s) + 'vw,' + r(f.max * s) + 'px)';
+  }
+
+  // 纵向钳制到「顶部带」或「底部带」:y ≤ lowMax 或 y ≥ highMin,否则归到较近的带边。
+  function clampY(y, lowMax, highMin) {
+    const v = clamp(num(y, NaN), 0, 100);
+    if (!Number.isFinite(v)) return highMin > 0 ? highMin : 0;
+    if (v <= lowMax) return Math.max(0, Math.min(v, lowMax));
+    if (v >= highMin) return Math.min(100, Math.max(v, highMin));
+    return (v - lowMax <= highMin - v) ? Math.max(0, lowMax) : Math.min(100, highMin);
+  }
+
+  const API = { FONTS, GROUPS, ALIGNS, DEFAULT_COLOR, SIZE_MIN, SIZE_MAX,
+                normalize, isDefault, userPosActive, fontCss, clampY };
+  if (typeof module !== 'undefined' && module.exports) module.exports = API;
+  else root.Appearance = API;
+})(typeof self !== 'undefined' ? self : this);
+
+</script>
+  <script>
+// 版本库 纯逻辑(本地 localStorage 多版本管理的数据操作;node 安全可测)
+// 每个"版本"= 一份完整配置:{ id,name,updated, fmt, session, appearance }
+// 记录体内部的深拷贝、以及把记录落盘,都由调用方(editor.js)负责;
+// 本模块只做列表级的纯数组操作,不改入参。
+(function (root) {
+  'use strict';
+  const KIND = 'debate-timer-version';
+  const clone = (o) => (o == null ? o : JSON.parse(JSON.stringify(o)));
+  const newId = () => 'v' + Date.now() + Math.floor(Math.random() * 1e4);
+
+  // 由"当前工作三件套"构造一条记录(深拷贝,后续改动不污染记录)
+  function wrap(name, fmt, session, appearance) {
+    return {
+      id: newId(),
+      name: name || '',
+      updated: Date.now(),
+      fmt: clone(fmt),
+      session: clone(session),
+      appearance: clone(appearance),
+    };
+  }
+
+  const find = (list, id) => (Array.isArray(list) ? list.find((x) => x && x.id === id) : undefined);
+  const upsert = (list, rec) => {
+    const next = Array.isArray(list) ? list.slice() : [];
+    const i = next.findIndex((x) => x && x.id === rec.id);
+    if (i >= 0) next[i] = rec; else next.push(rec);
+    return next;
+  };
+  const remove = (list, id) => (Array.isArray(list) ? list.filter((x) => x.id !== id) : []);
+  const rename = (list, id, name) => {
+    if (!Array.isArray(list)) return [];
+    const i = list.findIndex((x) => x && x.id === id);
+    if (i < 0) return list.slice();
+    const next = list.slice();
+    next[i] = Object.assign({}, list[i], { name: name || '', updated: Date.now() });
+    return next;
+  };
+  // 深拷贝副本,name 加" 副本"后缀,追加到表尾
+  function duplicate(list, v) {
+    const rec = wrap((v.name || '') + ' 副本', v.fmt, v.session, v.appearance);
+    return upsert(list, rec);
+  }
+
+  // 结构校验(导入文件的门槛);fmt 内部的完整校验仍交给 Presets.validate
+  function validate(v) {
+    const errs = [];
+    if (!v || typeof v !== 'object') errs.push('版本数据不是对象');
+    else {
+      if (typeof v.id !== 'string' || !v.id) errs.push('缺版本 id');
+      if (typeof v.name !== 'string' || !v.name.trim()) errs.push('缺版本名');
+      const fmt = v.fmt;
+      if (!fmt || typeof fmt !== 'object') errs.push('缺赛制 fmt');
+      else {
+        if (typeof fmt.name !== 'string' || !fmt.name.trim()) errs.push('赛制缺名称');
+        if (!Array.isArray(fmt.stages) || !fmt.stages.length) errs.push('环节不能为空');
+      }
+      if (!v.session || typeof v.session !== 'object') errs.push('缺比赛信息 session');
+      if (!v.appearance || typeof v.appearance !== 'object') errs.push('缺投屏外观 appearance');
+    }
+    return { ok: errs.length === 0, errors: errs };
+  }
+
+  const isVersionExport = (json) => !!(json && json.kind === KIND);
+
+  const API = { KIND, clone, newId, wrap, find, upsert, remove, rename, duplicate, validate, isVersionExport };
+  if (typeof module !== 'undefined' && module.exports) module.exports = API;
+  else root.Versions = API;
+})(typeof self !== 'undefined' ? self : this);
+
+</script>
+  <script>
+// 辩论赛计时器 · 配置/编辑层
+// 职责:localStorage 数据层、赛制列表与"可编辑副本"、逐环节表格编辑、
+//      比赛信息字段、三页背景图上传压缩、导入导出 JSON。
+// 暴露 window.DT:编辑器数据与当前工作赛制 cur;由 app.js 消费发起计时。
+(function (root) {
+  'use strict';
+  const P = root.Presets;
+  const V = root.Versions;   // 版本库纯逻辑(versions.js 定义)
+  const $ = (id) => document.getElementById(id);
+  const toast = (msg) => {
+    const t = $('toast');
+    t.textContent = msg; t.classList.remove('hidden');
+    clearTimeout(toast._h); toast._h = setTimeout(() => t.classList.add('hidden'), 2600);
+  };
+
+  // ---------- 数据层(localStorage) ----------
+  const K_CUSTOMS = 'dt.customs';
+  const K_SESSION = 'dt.session';
+  const K_VERSIONS = 'dt.versions';   // 版本库:每份完整配置一个版本
+  const K_DRAFT = 'dt.draft';         // 自动草稿:关页/切换不丢工作
+  const read = (k, d) => { try { const v = JSON.parse(localStorage.getItem(k)); return v == null ? d : v; } catch (e) { return d; } };
+  const write = (k, v) => { try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) { toast('保存失败:浏览器存储空间不足'); } };
+
+  const DEF_SESSION = () => ({
+    eventTitle: '', topic: '',
+    teamName: { aff: '', neg: '' },
+    art: { timer: null },
+    bgPreset: { timer: null },  // 'blue'|'purple'|null(null=默认深绿)
+  });
+  // 读时向后兼容:旧记录可能仍带 art.cover/end 等键,保留但不再渲染;
+  // 它们可在卡3用「封面/结束 置首·追加」一次性迁进图文行(见 ensureCover/ensureEnd)。
+
+  const store = {
+    customs() { return read(K_CUSTOMS, []); },
+    saveCustoms(a) { write(K_CUSTOMS, a); },
+    session() { return Object.assign(DEF_SESSION(), read(K_SESSION, {})); },
+    saveSession(s) { write(K_SESSION, s); },
+    versions() { return read(K_VERSIONS, []); },
+    saveVersions(a) { write(K_VERSIONS, a); },
+    draft() { return read(K_DRAFT, null); },
+    saveDraft(d) { write(K_DRAFT, d); },
+  };
+
+  // ---------- 当前工作赛制 cur ----------
+  // cur = { id: string|null(内置/新建时为 null), fmt: Format(可变副本),
+  //         srcLabel: string, pristine: string(载入时 JSON,判脏) }
+  const C = {
+    cur: null,
+    selKey: null,        // {kind:'builtin',i}|{kind:'custom',id}|{kind:'blank'}
+    dirty: false,
+    draftVid: null,      // 当前工作区挂在哪个版本上(null=尚未作为版本保存)
+    draftName: '',       // 当前工作区显示名(版本名 / 草稿名)
+    snapSess: null,      // 载入/保存版本瞬间的 session JSON,判"改了没存"
+    snapApp: null,       // 同上,appearance JSON
+  };
+  const curFmt = () => C.cur.fmt;
+  const blankFormat = () => {
+    const mk = (st) => Object.assign({ id: '' }, st);
+    return {
+      name: '我的赛制', builtin: false,
+      poolPerSideSec: { aff: 18 * 60, neg: 18 * 60 },
+      warningSec: 30,
+      stages: [
+        P.contentSeg('image', '封面'),
+        mk({ title: '正方一辩立论', type: 'statement', mode: 'fixed', affSec: 180, negSec: 0, leadSide: 'aff' }),
+        mk({ title: '反方一辩立论', type: 'statement', mode: 'fixed', affSec: 0, negSec: 180, leadSide: 'neg' }),
+        mk({ title: '自由辩论', type: 'free-debate', mode: 'fixed', affSec: 180, negSec: 180, leadSide: 'aff' }),
+        P.contentSeg('image', '结束'),
+      ].map((st, i) => Object.assign(st, { id: String(i) })),
+    };
+  };
+
+  function setCur(fmt, id, srcLabel) {
+    C.cur = { fmt: P.copyOf(fmt), id: id || null, srcLabel: srcLabel || fmt.name, pristine: JSON.stringify(fmt) };
+    C.dirty = false;
+  }
+  const markDirty = () => {
+    C.dirty = (JSON.stringify(C.cur.fmt) !== C.cur.pristine);
+    if (C.dirty) noteWorkChanged();   // 改动即自动存草稿 + 刷版本区状态
+  };
+
+  // ---------- 列表渲染 ----------
+  function renderList() {
+    const el = $('format-list');
+    const customs = store.customs();
+    el.innerHTML = '';
+    const mk = (label, tag, key, name) => {
+      const d = document.createElement('button');
+      d.className = 'fmt-chip' + (keyEq(C.selKey, key) ? ' sel' : '');
+      d.innerHTML = '<span>' + esc(label) + '</span>' + (tag ? '<span class="tag">' + esc(tag) + '</span>' : '');
+      d.title = name;
+      d.onclick = () => loadKey(key);
+      el.appendChild(d);
+    };
+    P.BUILTINS.forEach((b, i) => mk(b.name, '内置', { kind: 'builtin', i }, b.name));
+    customs.forEach((c) => mk(c.name, '我的', { kind: 'custom', id: c.id }, c.name));
+    mk('＋ 新建空白', '', { kind: 'blank' }, '');
+    updateSrcLabel();
+  }
+  const keyEq = (a, b) => !!a && !!b && a.kind === b.kind && a.kind === 'builtin' ? a.i === b.i
+    : a.kind === 'custom' ? a.id === b.id : a.kind === 'blank' && b.kind === 'blank';
+
+  function updateSrcLabel() {
+    const el = $('working-source');
+    if (!C.cur) { el.textContent = ''; return; }
+    const mark = C.dirty ? '· 已修改(未保存)' : '';
+    el.textContent = '当前:' + C.cur.srcLabel + mark;
+  }
+
+  function loadKey(key) {
+    if (C.dirty && C.cur && !confirm('当前赛制有未保存的修改,放弃并载入其他?')) return;
+    C.selKey = key;
+    if (key.kind === 'builtin') {
+      setCur(P.BUILTINS[key.i], null, '内置·' + P.BUILTINS[key.i].name);
+    } else if (key.kind === 'custom') {
+      const c = store.customs().find((x) => x.id === key.id);
+      if (!c) { C.selKey = { kind: 'builtin', i: 0 }; loadKey(C.selKey); return; }
+      setCur(c, c.id, '自定义·' + c.name);
+    } else {
+      setCur(blankFormat(), null, '新建空白');
+    }
+    syncMetaUI();
+    renderList();
+    renderRows();
+    updatePoolLine();
+    updateSrcLabel();
+    msg('');
+    noteWorkChanged();
+  }
+
+  // 从值同步回输入框
+  function syncMetaUI() {
+    const f = curFmt();
+    $('fmt-name').value = f.name;
+    $('fmt-warning').value = String(f.warningSec == null ? 30 : f.warningSec);
+    $('pool-aff').value = P.fmtSec(f.poolPerSideSec.aff);
+    $('pool-neg').value = P.fmtSec(f.poolPerSideSec.neg);
+  }
+  // 环节类型分两组:计时(statement/cross-exam/free-debate) 与 内容(image/text)
+  const TYPE_LABEL = { statement: '陈词', 'cross-exam': '质询', 'free-debate': '对辩', image: '图片', text: '文字' };
+  const TYPE_GROUP = [['计时环节', P.TIMED_TYPES], ['内容环节', P.CONTENT_TYPES]];
+  const MODE_OPTS = [['fixed', '固定'], ['pool', '预算']];
+
+  // ---------- 环节表格 ----------
+  function renderRows() {
+    const tb = $('stage-rows');
+    tb.innerHTML = '';
+    curFmt().stages.forEach((st, i) => tb.appendChild(rowEl(st, i)));
+  }
+
+  function rowEl(st, i) {
+    const content = P.isContent(st);
+    const tr = document.createElement('tr');
+    if (st.mode === 'pool') tr.className = 'row-pool';
+    if (content) tr.classList.add('row-content');
+
+    const tdNum = document.createElement('td'); tdNum.className = 'c-num'; tdNum.textContent = String(i + 1);
+
+    // 环节名(+ 计时行的 固定/预算 切换)
+    const name = document.createElement('input');
+    name.type = 'text'; name.value = st.title; name.maxLength = 30;
+    name.addEventListener('input', () => { st.title = name.value; markDirty(); });
+    const nameBox = document.createElement('span'); nameBox.className = 'cell-name';
+    nameBox.appendChild(name);
+    if (!content) {
+      const modeSel = document.createElement('select');
+      MODE_OPTS.forEach(([v, l]) => { const o = document.createElement('option'); o.value = v; o.textContent = l; if (v === st.mode) o.selected = true; modeSel.appendChild(o); });
+      modeSel.addEventListener('change', () => { st.mode = modeSel.value; markDirty(); renderRows(); updatePoolLine(); updateSrcLabel(); });
+      nameBox.appendChild(modeSel);
+    }
+    const tdName = document.createElement('td'); tdName.appendChild(nameBox);
+
+    // 类型(计时/内容 两组下拉)
+    const typeSel = document.createElement('select');
+    typeSel.className = 'type-sel ' + st.type;
+    fillTypeSel(typeSel, st.type);
+    typeSel.addEventListener('change', () => { st.type = typeSel.value; applyRowType(i); markDirty(); renderRows(); updatePoolLine(); updateSrcLabel(); });
+    const tdType = document.createElement('td'); tdType.appendChild(typeSel);
+
+    // 操作
+    const ops = document.createElement('td');
+    ops.className = 'c-ops';
+    const up = opBtn('上', () => move(i, -1)), dn = opBtn('下', () => move(i, 1)), del = opBtn('删', () => removeRow(i));
+    del.classList.add('op-del');
+    ops.append(up, dn, del);
+
+    if (content) { tr.append(tdNum, tdName, tdType, contentEditCell(st), ops); return tr; }
+
+    // ---- 计时行:正方/反方时长 + 先手 ----
+    const secInput = (side) => {
+      const inp = document.createElement('input');
+      inp.type = 'text'; inp.inputMode = 'numeric';
+      inp.value = st.mode === 'pool' ? '' : P.fmtSec(st[side === 'aff' ? 'affSec' : 'negSec']);
+      inp.placeholder = st.mode === 'pool' ? '共用预算' : '0:00';
+      inp.disabled = st.mode === 'pool';
+      inp.addEventListener('change', () => {
+        const v = P.parseSec(inp.value);
+        if (Number.isNaN(v)) { toast('时长格式无效,示例 3:30 或 210'); inp.value = P.fmtSec(st[side === 'aff' ? 'affSec' : 'negSec']); return; }
+        st[side === 'aff' ? 'affSec' : 'negSec'] = Math.max(0, v);
+        inp.value = P.fmtSec(st[side === 'aff' ? 'affSec' : 'negSec']);
+        markDirty(); updateSrcLabel();
+      });
+      return inp;
+    };
+    const tdAff = document.createElement('td'); tdAff.appendChild(secInput('aff'));
+    const tdNeg = document.createElement('td'); tdNeg.appendChild(secInput('neg'));
+
+    const leadSel = document.createElement('select');
+    [['aff', '正方'], ['neg', '反方']].forEach(([v, l]) => { const o = document.createElement('option'); o.value = v; o.textContent = l + '先'; if (v === st.leadSide) o.selected = true; leadSel.appendChild(o); });
+    leadSel.addEventListener('change', () => { st.leadSide = leadSel.value; markDirty(); });
+    const tdLead = document.createElement('td'); tdLead.appendChild(leadSel);
+
+    tr.append(tdNum, tdName, tdType, tdAff, tdNeg, tdLead, ops);
+    return tr;
+  }
+
+  function fillTypeSel(sel, cur) {
+    sel.innerHTML = '';
+    TYPE_GROUP.forEach(([gLabel, vals]) => {
+      const og = document.createElement('optgroup'); og.label = gLabel;
+      vals.forEach((v) => { const o = document.createElement('option'); o.value = v; o.textContent = TYPE_LABEL[v]; if (v === cur) o.selected = true; og.appendChild(o); });
+      sel.appendChild(og);
+    });
+  }
+
+  // 类型切换后把行整形成该类型的骨架:内容→fixed+0/0+负载;计时→补齐秒数/先手并去掉内容负载
+  function applyRowType(i) {
+    const a = curFmt().stages; const st = a[i];
+    if (P.CONTENT_TYPES.indexOf(st.type) >= 0) { a[i] = P.normalizeStage(st); return; }
+    const n = Object.assign({}, st);
+    if (n.mode !== 'fixed' && n.mode !== 'pool') n.mode = 'fixed';
+    if (!Number.isFinite(n.affSec) || n.affSec < 0) n.affSec = 120;
+    if (!Number.isFinite(n.negSec) || n.negSec < 0) n.negSec = 120;
+    if (n.leadSide !== 'aff' && n.leadSide !== 'neg') n.leadSide = 'aff';
+    delete n.imageData; delete n.bg; delete n.text; delete n.textSize;
+    a[i] = n;
+  }
+
+  // ---- 内容环节的编辑单元格(colspan 吃掉 时长×2+先手 三列) ----
+  function contentEditCell(st) {
+    const td = document.createElement('td'); td.colSpan = 3;
+    const wrap = document.createElement('div'); wrap.className = 'c-edit';
+    if (st.type === 'image') {
+      imageEditor(st, wrap);
+      wrap.title = '图片环节:全屏一整幅图(封面/结束),无文字、无计时';
+    } else {
+      textEditor(st, wrap);
+      wrap.title = '文字环节:计时页背景 + 居中文字,顶部保留辩题/队名,无计时';
+    }
+    td.appendChild(wrap); return td;
+  }
+  function stageThumb(st) {
+    const th = document.createElement('div'); th.className = 'art-thumb stage-thumb';
+    paintStageThumb(th, st); return th;
+  }
+  function paintStageThumb(th, st) {
+    th.classList.toggle('has', !!st.imageData);
+    th.classList.toggle('th-blue', !st.imageData && st.bg === 'blue');
+    th.classList.toggle('th-purple', !st.imageData && st.bg === 'purple');
+    th.style.backgroundImage = st.imageData ? 'url("' + st.imageData + '")' : '';
+  }
+  function imageEditor(st, wrap) {
+    const th = stageThumb(st);
+    const file = document.createElement('input'); file.type = 'file'; file.accept = 'image/*'; file.hidden = true;
+    const up = document.createElement('button'); up.type = 'button'; up.className = 'btn btn-small'; up.textContent = '上传图片';
+    up.addEventListener('click', () => file.click());
+    file.addEventListener('change', (ev) => {
+      const f = ev.target.files && ev.target.files[0]; if (!f) return;
+      compressImage(f, (url) => { st.imageData = url; st.bg = null; paintStageThumb(th, st); markDirty(); updateSrcLabel(); });
+      ev.target.value = '';
+    });
+    const clear = document.createElement('button'); clear.type = 'button'; clear.className = 'btn btn-small'; clear.textContent = '清除图';
+    clear.addEventListener('click', () => { st.imageData = null; paintStageThumb(th, st); markDirty(); updateSrcLabel(); });
+    const chips = document.createElement('span'); chips.className = 'ap-chips row-chips';
+    const curBg = () => (st.imageData ? '__img' : (st.bg || ''));
+    [['', '默认底'], ['blue', '夜色'], ['purple', '烟紫']].forEach(([val, label]) => {
+      const b = document.createElement('button'); b.type = 'button'; b.className = 'ap-chip'; b.textContent = label;
+      const paint = () => b.classList.toggle('sel', curBg() === val);
+      paint();
+      b.addEventListener('click', () => { st.imageData = null; st.bg = val === '' ? null : val; paintStageThumb(th, st); paint(); markDirty(); updateSrcLabel(); });
+      chips.appendChild(b);
+    });
+    wrap.append(th, file, up, clear, chips);
+  }
+  function textEditor(st, wrap) {
+    const ta = document.createElement('textarea'); ta.className = 'c-text'; ta.maxLength = 1000; ta.rows = 3;
+    ta.placeholder = '输入本环节要显示的文字,可换行';
+    ta.value = typeof st.text === 'string' ? st.text : '';
+    ta.addEventListener('input', () => { st.text = ta.value; markDirty(); });
+    const sizeSel = document.createElement('select');
+    [['0.75', '小'], ['1', '中'], ['1.3', '大']].forEach(([v, l]) => { const o = document.createElement('option'); o.value = v; o.textContent = l; o.selected = String(st.textSize) === v; sizeSel.appendChild(o); });
+    sizeSel.addEventListener('change', () => { st.textSize = Number(sizeSel.value); markDirty(); updateSrcLabel(); });
+    const meta = document.createElement('span'); meta.className = 'muted'; meta.textContent = '字号 ';
+    const hint = document.createElement('span'); hint.className = 'muted'; hint.textContent = '背景 = 计时页全局背景(卡4)';
+    wrap.append(ta, meta, sizeSel, hint);
+  }
+  function opBtn(label, fn) {
+    const b = document.createElement('button');
+    b.className = 'op-btn'; b.textContent = label; b.type = 'button'; b.onclick = fn; return b;
+  }
+  function move(i, d) {
+    const a = curFmt().stages; const j = i + d;
+    if (j < 0 || j >= a.length) return;
+    const t = a[i]; a[i] = a[j]; a[j] = t;
+    markDirty(); renderRows(); updateSrcLabel();
+  }
+  function removeRow(i) {
+    curFmt().stages.splice(i, 1); markDirty(); renderRows(); updateSrcLabel();
+  }
+  // 新增环节:type 决定骨架——statement 计时段 / image / text 内容段(经 contentSeg,恒 fixed 0/0)
+  function addRow(type) {
+    type = type || 'statement';
+    let st;
+    if (type === 'image' || type === 'text') {
+      st = P.contentSeg(type, type === 'image' ? '新图片页' : '新文字页');
+    } else {
+      st = { title: '新环节', type: 'statement', mode: 'fixed', affSec: 120, negSec: 120, leadSide: 'aff' };
+    }
+    st.id = String(Date.now());
+    curFmt().stages.push(st);
+    markDirty(); renderRows(); updatePoolLine(); updateSrcLabel();
+    const rows = $('stage-rows').children;
+    if (rows.length) {
+      const el = rows[rows.length - 1];
+      const inp = el.querySelector('input, textarea');
+      if (inp) inp.focus();
+    }
+  }
+  // 「全部改为预算共用」:内容环节(图文/文字)恒为 fixed,不可改预算,须跳过
+  function poolAll() {
+    curFmt().stages.forEach((st) => { if (!P.isContent(st)) st.mode = 'pool'; });
+    markDirty(); renderRows(); updatePoolLine(); updateSrcLabel();
+  }
+  function updatePoolLine() {
+    const has = curFmt() && curFmt().stages.some((s) => s.mode === 'pool');
+    $('budget-line').classList.toggle('hidden', !has);
+  }
+  function msg(text) { $('edit-msg').textContent = text || ''; }
+
+  // ---- 封面/结束 图文行:首行/末行已是 image 则复用(把旧「卡4 封面/结束图」迁入,仅迁则清旧),
+  //      否则插入一个新的 image 行。只有实际迁移时才会清空 session.art[key],避免静默删数据。 ----
+  function ensureCover() {
+    const a = curFmt().stages;
+    const s = store.session();
+    const legacy = (s.art && s.art.cover) || null;
+    let row = (a.length && a[0].type === 'image') ? a[0] : null;
+    let inserted = false;
+    if (!row) { row = Object.assign(P.contentSeg('image', '封面'), { id: String(Date.now()) }); a.unshift(row); inserted = true; }
+    let migrated = false;
+    if (legacy && !row.imageData) { row.imageData = legacy; migrated = true; }
+    if (migrated) { s.art.cover = null; store.saveSession(s); }
+    if (!inserted && !migrated) { toast('首行已是图文封面页,无需再插'); return; }
+    markDirty(); renderRows(); updatePoolLine(); updateSrcLabel();
+    msg(migrated ? '封面行已就位,并把旧「卡4 封面图」迁入该行' : '已在首行插入图文封面页');
+  }
+  function ensureEnd() {
+    const a = curFmt().stages;
+    const s = store.session();
+    const legacy = (s.art && s.art.end) || null;
+    let row = (a.length && a[a.length - 1].type === 'image') ? a[a.length - 1] : null;
+    let inserted = false;
+    if (!row) { row = Object.assign(P.contentSeg('image', '结束'), { id: String(Date.now()) }); a.push(row); inserted = true; }
+    let migrated = false;
+    if (legacy && !row.imageData) { row.imageData = legacy; migrated = true; }
+    if (migrated) { s.art.end = null; store.saveSession(s); }
+    if (!inserted && !migrated) { toast('末行已是图文结束页,无需再插'); return; }
+    markDirty(); renderRows(); updatePoolLine(); updateSrcLabel();
+    msg(migrated ? '结束行已就位,并把旧「卡4 结束页图」迁入该行' : '已在末行插入图文结束页');
+  }
+
+  // ---------- 保存/导入/导出 ----------
+  function saveCustom() {
+    const f = curFmt();
+    let name = (f.name || '').trim();
+    if (!name) { toast('请先给赛制起个名字'); return; }
+    const isBuiltinName = P.BUILTINS.some((b) => b.name === name);
+    if (isBuiltinName) name = name + '(我的)';           // 避免与内置混淆
+    f.name = name;
+    const customs = store.customs();
+    const clash = customs.find((c) => c.name === name && (!C.cur.id || c.id !== C.cur.id));
+    if (clash) {
+      if (!confirm('已存在同名赛制「' + name + '」,覆盖它?')) return;
+    }
+    const rec = { id: clash ? clash.id : C.cur.id || ('c' + Date.now() + Math.floor(Math.random() * 1e4)) };
+    delete f.builtin;
+    const body = Object.assign({ builtin: false }, f);
+    const merged = Object.assign(rec, body);
+    let saved = false;
+    const next = customs.map((c) => { if (c.id === merged.id) { saved = true; return merged; } return c; });
+    store.saveCustoms(saved ? next : next.concat([merged]));
+    C.cur.id = merged.id;
+    C.cur.pristine = JSON.stringify(merged);
+    C.cur.srcLabel = '自定义·' + name;
+    C.selKey = { kind: 'custom', id: merged.id };
+    C.dirty = false;
+    renderList(); syncMetaUI(); updateSrcLabel();
+    noteWorkChanged();
+    toast('已保存「' + name + '」');
+  }
+
+  function doExport() {
+    const f = P.copyOf(curFmt());
+    const blob = new Blob([JSON.stringify(f, null, 2)], { type: 'application/json' });
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = (f.name || '赛制').replace(/[\\/:*?"<>|]/g, '_') + '.json';
+    document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(() => URL.revokeObjectURL(a.href), 800);
+  }
+  function doImport(file) {
+    if (!file) return;
+    const r = new FileReader();
+    r.onload = () => {
+      let data; try { data = JSON.parse(r.result); } catch (e) { toast('文件不是合法 JSON'); return; }
+      if (V.isVersionExport(data)) { addVersionJson(data.version); return; }
+      const v = P.validate(data);
+      if (!v.ok) { toast('校验未通过:' + (v.errors[0] || '')); return; }
+      data = P.copyOf(data);
+      if (!data.name || !(data.name.trim())) data.name = file.name.replace(/\.json$/i, '');
+      if (C.dirty && C.cur && !confirm('覆盖当前编辑内容?')) return;
+      setCur(data, null, '导入·' + data.name);
+      C.selKey = { kind: 'blank' };
+      syncMetaUI(); renderList(); renderRows(); updatePoolLine(); updateSrcLabel();
+      noteWorkChanged();
+      toast('已导入「' + data.name + '」');
+    };
+    r.onerror = () => toast('读取文件失败');
+    r.readAsText(file);
+  }
+  function deleteCustom() {
+    if (!C.selKey || C.selKey.kind !== 'custom') { toast('当前不是我的赛制,无需删除'); return; }
+    if (!confirm('删除自定义赛制?')) return;
+    const customs = store.customs().filter((c) => c.id !== C.selKey.id);
+    store.saveCustoms(customs);
+    C.selKey = { kind: 'builtin', i: 0 };
+    loadKey(C.selKey);
+    toast('已删除');
+  }
+
+  // ---------- 比赛信息 & 图片 ----------
+  function bindSessionFields() {
+    const s = store.session();
+    $('set-event').value = s.eventTitle; $('set-topic').value = s.topic;
+    $('set-aff').value = s.teamName.aff; $('set-neg').value = s.teamName.neg;
+    const save = () => { const s2 = store.session(); s2.eventTitle = $('set-event').value; s2.topic = $('set-topic').value; s2.teamName.aff = $('set-aff').value; s2.teamName.neg = $('set-neg').value; store.saveSession(s2); noteWorkChanged(); };
+    ['set-event', 'set-topic', 'set-aff', 'set-neg'].forEach((id) => $(id).addEventListener('change', save));
+  }
+  const TH_CLASSES = ['th-blue', 'th-purple'];
+  const BGB_OPT = [['green', '墨绿'], ['blue', '夜色'], ['purple', '烟紫']];
+  function syncBgChips(key) {
+    const box = $('bgp-' + key); if (!box) return;
+    const s = store.session();
+    const cur = (s.art && s.art[key]) ? 'none' : ((s.bgPreset && s.bgPreset[key]) || 'green');
+    Array.prototype.forEach.call(box.querySelectorAll('.ap-chip'), (b, i) => {
+      b.classList.toggle('sel', BGB_OPT[i][0] === cur);
+    });
+  }
+  function thumbOf(key) {
+    const s = store.session();
+    const thumb = $('art-' + key + '-thumb');
+    if (!thumb) return;
+    const url = s.art[key];
+    const preset = s.bgPreset && s.bgPreset[key];
+    TH_CLASSES.forEach((c) => thumb.classList.remove(c));
+    thumb.classList.toggle('has', !!url);
+    if (url) { thumb.style.backgroundImage = 'url("' + url + '")'; }
+    else { thumb.style.backgroundImage = ''; if (preset) thumb.classList.add('th-' + preset); }
+    syncBgChips(key);
+  }
+  function buildBgPresets() {
+    ['timer'].forEach((key) => {
+      const box = $('bgp-' + key); if (!box) return;
+      box.innerHTML = '';
+      BGB_OPT.forEach(([id, label]) => {
+        const b = document.createElement('button');
+        b.type = 'button'; b.className = 'ap-chip'; b.textContent = label;
+        b.addEventListener('click', () => {
+          const s = store.session();
+          s.art[key] = null;
+          s.bgPreset[key] = id === 'green' ? null : id;
+          store.saveSession(s); thumbOf(key);
+          if (window.AppAPI && AppAPI.onArtChange) AppAPI.onArtChange(key, id);
+          toast('已用内置「' + label + '」背景');
+        });
+        box.appendChild(b);
+      });
+      syncBgChips(key);
+    });
+  }
+  function bindArt() {
+    const files = { timer: 'file-timer' };
+    Object.keys(files).forEach((key) => {
+      $(files[key]).addEventListener('change', (ev) => {
+        const file = ev.target.files && ev.target.files[0];
+        if (!file) return;
+        compressImage(file, (url) => {
+          const s = store.session(); s.art[key] = url; s.bgPreset[key] = null; store.saveSession(s); thumbOf(key);
+          if (window.AppAPI && AppAPI.onArtChange) AppAPI.onArtChange(key, url);
+          toast('已更新' + (key === 'timer' ? '计时' : key) + '背景');
+        });
+        ev.target.value = '';
+      });
+      thumbOf(key);
+    });
+    document.querySelectorAll('[data-art-reset]').forEach((b) => {
+      b.addEventListener('click', () => {
+        const key = b.getAttribute('data-art-reset');
+        const s = store.session(); s.art[key] = null; s.bgPreset[key] = null; store.saveSession(s); thumbOf(key);
+        if (window.AppAPI && AppAPI.onArtChange) AppAPI.onArtChange(key, null);
+        toast('已清除背景,用回默认');
+      });
+    });
+    buildBgPresets();
+  }
+  function compressImage(file, cb) {
+    const url = URL.createObjectURL(file);
+    const img = new Image();
+    img.onload = () => {
+      const MAX = 1920;
+      let { width: w, height: h } = img;
+      if (Math.max(w, h) > MAX) { const k = MAX / Math.max(w, h); w = Math.round(w * k); h = Math.round(h * k); }
+      const cv = document.createElement('canvas'); cv.width = w; cv.height = h;
+      cv.getContext('2d').drawImage(img, 0, 0, w, h);
+      URL.revokeObjectURL(url);
+      cb(cv.toDataURL('image/jpeg', 0.82));
+    };
+    img.onerror = () => { URL.revokeObjectURL(url); toast('图片无法读取'); };
+    img.src = url;
+  }
+
+  const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+
+  // ---------- 投屏外观(卡4):存储 + 假屏拖拽 + 控件 ----------
+  const K_APPEAR = 'dt.appearance';
+  const AP_GROUPS = [
+    ['time', '计时数字'], ['stage', '环节名'], ['topic', '辩题'],
+    ['teams', '队伍名'], ['state', '时间到提示'],
+  ];
+  const AP_TOPIC_PRESETS = [
+    { l: '顶部·左', y: 7, a: 'left' }, { l: '顶部·中', y: 7, a: 'center' }, { l: '顶部·右', y: 7, a: 'right' },
+    { l: '底部·左', y: 90, a: 'left' }, { l: '底部·中', y: 90, a: 'center' }, { l: '底部·右', y: 90, a: 'right' },
+    { l: '默认', y: null, a: null },
+  ];
+  const AP_TEAMS_PRESETS = [
+    { l: '顶部', y: 16 }, { l: '底部', y: 92 }, { l: '默认', y: null },
+  ];
+  const APPEAR = {
+    state() { return Appearance.normalize(read(K_APPEAR, null)); },
+    get() { return this.state(); },
+    save(a) { write(K_APPEAR, a); afterWorkingChange(); },
+    clear() { try { localStorage.removeItem(K_APPEAR); } catch (e) { /* ignore */ } afterWorkingChange(); },
+  };
+  const ap = $;
+  const clampN = (v, lo, hi) => Math.min(hi, Math.max(lo, v));
+  const apXOf = (align) => (align === 'left' ? 12 : align === 'right' ? 88 : 50);
+
+  function apPaint() {
+    const a = APPEAR.state();
+    const topic = a.pos.topic || { y: 8, align: 'center' };
+    const teams = a.pos.teams || { y: 20 };
+    const tEl = ap('ap-drag-topic'), gEl = ap('ap-drag-teams');
+    if (!tEl || !gEl) return;
+    tEl.style.left = apXOf(topic.align) + '%'; tEl.style.top = topic.y + '%';
+    gEl.style.left = '50%'; gEl.style.top = teams.y + '%';
+    tEl.style.color = a.style.topic.color;
+    gEl.style.color = a.style.teams.color;
+    tEl.style.fontSize = Appearance.fontCss('topic', a.style.topic.size) || '';
+    gEl.style.fontSize = Appearance.fontCss('teams', a.style.teams.size) || '';
+  }
+  function apChipEq(p, cur, kind) {
+    if (p.y == null) return cur == null;
+    if (cur == null) return false;
+    return p.y === cur.y && (kind === 'topic' ? p.a === cur.align : true);
+  }
+  function apSyncChips() {
+    const a = APPEAR.state();
+    const mark = (containerId, presets, cur, kind) => {
+      const box = ap(containerId); if (!box) return;
+      Array.prototype.forEach.call(box.querySelectorAll('.ap-chip'), (b, i) => {
+        b.classList.toggle('sel', apChipEq(presets[i], cur, kind));
+      });
+    };
+    mark('ap-preset-topic', AP_TOPIC_PRESETS, a.pos.topic, 'topic');
+    mark('ap-preset-teams', AP_TEAMS_PRESETS, a.pos.teams, 'teams');
+  }
+  function apBuildChipGroup(containerId, presets, kind) {
+    const box = ap(containerId); if (!box) return;
+    box.innerHTML = '';
+    const label = document.createElement('span');
+    label.className = 'ap-chips-label';
+    label.textContent = kind === 'topic' ? '辩题位置:' : '队伍名位置:';
+    box.appendChild(label);
+    presets.forEach((p) => {
+      const b = document.createElement('button');
+      b.type = 'button'; b.className = 'ap-chip'; b.textContent = p.l;
+      b.addEventListener('click', () => {
+        const a = APPEAR.state();
+        if (p.y == null) a.pos[kind] = null;
+        else if (kind === 'topic') a.pos[kind] = { y: p.y, align: p.a };
+        else a.pos[kind] = { y: p.y };
+        APPEAR.save(a); apSyncChips(); apPaint();
+        apMsg(p.l === '默认' ? '已恢复该元素默认位置' : '已设为「' + p.l + '」,开始比赛后生效');
+      });
+      box.appendChild(b);
+    });
+  }
+  function apBuildStyles() {
+    const box = ap('ap-style-rows'); if (!box) return;
+    box.innerHTML = '';
+    AP_GROUPS.forEach(([key, name]) => {
+      const row = document.createElement('div'); row.className = 'ap-srow';
+      const nm = document.createElement('span'); nm.className = 'ap-sname'; nm.textContent = name;
+      const color = document.createElement('input'); color.type = 'color'; color.dataset.key = key;
+      const rng = document.createElement('input'); rng.type = 'range'; rng.min = '50'; rng.max = '200'; rng.step = '5'; rng.dataset.key = key;
+      const val = document.createElement('span'); val.className = 'ap-sval';
+      const reset = document.createElement('button'); reset.type = 'button'; reset.className = 'ap-restore'; reset.textContent = '还原';
+      row.append(nm, color, rng, val, reset);
+      color.addEventListener('change', () => {
+        const a = APPEAR.state(); a.style[key].color = color.value; APPEAR.save(a); apPaint();
+        apMsg('已更新「' + name + '」颜色');
+      });
+      rng.addEventListener('input', () => { val.textContent = rng.value + '%'; });
+      rng.addEventListener('change', () => {
+        const a = APPEAR.state(); a.style[key].size = Number(rng.value) / 100; APPEAR.save(a); apPaint();
+        apMsg('已更新「' + name + '」字号');
+      });
+      reset.addEventListener('click', () => {
+        const a = APPEAR.state();
+        a.style[key] = { color: Appearance.DEFAULT_COLOR, size: 1 };
+        APPEAR.save(a); apSyncControls(); apMsg('已还原「' + name + '」样式');
+      });
+      box.appendChild(row);
+    });
+  }
+  function apSyncStyles() {
+    const a = APPEAR.state();
+    document.querySelectorAll('#ap-style-rows .ap-srow').forEach((row) => {
+      const colorIn = row.querySelector('input[type=color]');
+      const key = colorIn.dataset.key;
+      const s = a.style[key];
+      colorIn.value = s.color;
+      const rng = row.querySelector('input[type=range]');
+      rng.value = String(Math.round(s.size * 100));
+      row.querySelector('.ap-sval').textContent = Math.round(s.size * 100) + '%';
+    });
+  }
+  function apSyncControls() {
+    const a = APPEAR.state();
+    const sh = ap('ap-shadow'); if (sh) sh.checked = a.shadow;
+    apSyncStyles(); apSyncChips(); apPaint();
+  }
+  function apMsg(text) {
+    const m = ap('ap-msg'); if (!m) return;
+    m.textContent = text;
+    clearTimeout(apMsg._t); apMsg._t = setTimeout(() => { m.textContent = ''; }, 2200);
+  }
+  function apBindDrag() {
+    const canvas = ap('ap-preview'); if (!canvas) return;
+    [['ap-drag-topic', 'topic'], ['ap-drag-teams', 'teams']].forEach(([id, kind]) => {
+      const el = document.getElementById(id); if (!el) return;
+      el.addEventListener('pointerdown', (ev) => {
+        ev.preventDefault();
+        el.dataset.drag = '1'; el.classList.add('dragging');
+        try { el.setPointerCapture(ev.pointerId); } catch (e) { /* ignore */ }
+      });
+      el.addEventListener('pointermove', (ev) => {
+        if (el.dataset.drag !== '1') return;
+        const r = canvas.getBoundingClientRect();
+        const x = clampN((ev.clientX - r.left) / r.width * 100, 0, 100);
+        const y = Math.round(Appearance.clampY((ev.clientY - r.top) / r.height * 100, 34, 56) * 10) / 10;
+        const a = APPEAR.state();
+        if (kind === 'topic') {
+          a.pos.topic = { y, align: x < 30 ? 'left' : x > 70 ? 'right' : 'center' };
+        } else { a.pos.teams = { y }; }
+        APPEAR.save(a); apSyncChips(); apPaint();
+      });
+      const endDrag = (ev) => {
+        if (el.dataset.drag !== '1') return;
+        el.dataset.drag = ''; el.classList.remove('dragging');
+        try { el.releasePointerCapture(ev.pointerId); } catch (e) { /* ignore */ }
+      };
+      el.addEventListener('pointerup', endDrag);
+      el.addEventListener('pointercancel', endDrag);
+    });
+  }
+
+  // ---------- 版本 / 自动草稿 ----------
+  const deep = V.clone;
+  const isBlankNew = () => (C.draftVid == null && !C.draftName);
+
+  function sessionHasContent() {
+    const s = store.session();
+    const art = s.art || {}, bgp = s.bgPreset || {};
+    return !!(s.eventTitle || s.topic || (s.teamName && (s.teamName.aff || s.teamName.neg)) ||
+      art.timer || bgp.timer);
+  }
+
+  // 是否有还没存进版本库的修改
+  function versionDirty() {
+    if (C.dirty) return true;                       // fmt 与载入基线不同
+    if (C.snapSess != null && JSON.stringify(store.session()) !== C.snapSess) return true;
+    if (C.snapApp != null && JSON.stringify(APPEAR.state()) !== C.snapApp) return true;
+    if (isBlankNew()) return sessionHasContent() || !Appearance.isDefault(APPEAR.state());
+    return false;
+  }
+
+  function persistDraft() {
+    if (!C.cur) return;
+    clearTimeout(persistDraft._t);
+    persistDraft._t = setTimeout(() => {
+      store.saveDraft({ vid: C.draftVid, name: C.draftName || '', fmt: curFmt() });
+    }, 350);
+  }
+
+  function refreshWorkingUI() {
+    const open = $('ver-open');
+    const saveB = $('btn-ver-save');
+    const dirty = versionDirty();
+    if (open) {
+      let t;
+      if (isBlankNew()) t = dirty ? '当前:空白草稿(有新内容,未保存为版本)' : '当前:空白草稿(尚未保存为版本)';
+      else t = '当前版本:' + (C.draftName || '') + (dirty ? ' · 有未保存修改' : ' · 已保存');
+      open.textContent = t;
+    }
+    if (saveB) saveB.textContent = isBlankNew() ? '保存为新版本' : '保存/覆盖当前版本';
+  }
+  function afterWorkingChange() { persistDraft(); refreshWorkingUI(); }
+  function noteWorkChanged() { afterWorkingChange(); }
+
+  // 把 session 输入框与背景缩略图刷成当前工作 session(版本载入/空白新建用)
+  function repaintSessionUI() {
+    const s = store.session();
+    $('set-event').value = s.eventTitle || '';
+    $('set-topic').value = s.topic || '';
+    $('set-aff').value = (s.teamName && s.teamName.aff) || '';
+    $('set-neg').value = (s.teamName && s.teamName.neg) || '';
+    thumbOf('timer');
+  }
+
+  // 把版本 V 完整载入工作区:fmt + session + appearance 全部落到现行键并重绘编辑 UI
+  function applyVersion(v) {
+    if (!v) return;
+    setCur(v.fmt, null, '版本·' + v.name);
+    C.draftVid = v.id;
+    C.draftName = v.name;
+    C.snapSess = JSON.stringify(v.session || {});
+    C.snapApp = JSON.stringify(v.appearance || {});
+    store.saveSession(Object.assign(DEF_SESSION(), deep(v.session || {})));
+    APPEAR.save(v.appearance == null ? null : deep(v.appearance));  // 会触发 noteWorkChanged
+    syncMetaUI(); renderList(); renderRows(); updatePoolLine(); updateSrcLabel(); msg('');
+    repaintSessionUI(); apSyncControls(); renderVersionList(); refreshWorkingUI();
+  }
+
+  function saveVersion() {
+    const existing = C.draftVid != null ? V.find(store.versions(), C.draftVid) : null;
+    let name;
+    if (existing) {
+      if (!confirm('覆盖版本「' + existing.name + '」? (赛制/比赛信息/背景/外观整份替换)')) return;
+      name = existing.name;
+    } else {
+      const fallback = (store.session().eventTitle || '').trim() || '未命名比赛';
+      name = (prompt('给这份版本起个名字(主页显示,常写第几场/哪场):', fallback) || '').trim();
+      if (!name) { toast('已取消保存'); return; }
+    }
+    const rec = existing ? V.clone(existing) : V.wrap(name, curFmt(), store.session(), APPEAR.state());
+    rec.name = name; rec.updated = Date.now();
+    rec.fmt = P.copyOf(curFmt());
+    rec.session = Object.assign(DEF_SESSION(), store.session());
+    rec.appearance = APPEAR.state();
+    store.saveVersions(V.upsert(store.versions(), rec));
+    C.draftVid = rec.id; C.draftName = name;
+    C.snapSess = JSON.stringify(rec.session);
+    C.snapApp = JSON.stringify(rec.appearance);
+    C.cur.pristine = JSON.stringify(rec.fmt);
+    C.cur.srcLabel = '版本·' + name;
+    C.dirty = false;
+    renderList(); renderVersionList(); syncMetaUI(); updateSrcLabel();
+    noteWorkChanged();
+    toast(existing ? '已覆盖版本「' + name + '」' : '已保存新版本「' + name + '」');
+  }
+
+  function confirmDiscard(why) {
+    if (!C.cur || !versionDirty()) return true;
+    return confirm((why || '此操作') + '会丢失当前未保存到版本的修改,继续?');
+  }
+
+  function startVersion(v) {
+    if (C.draftVid !== v.id) {
+      if (!confirmDiscard('切到版本「' + v.name + '」')) return;
+      applyVersion(v);
+    }
+    const b = $('btn-start'); if (b) b.click();
+  }
+  function editVersion(v) {
+    if (C.draftVid === v.id) {
+      if (versionDirty() && !confirm('「' + v.name + '」有未保存修改,放弃改动并重新载入?')) return;
+    } else if (!confirmDiscard('切到版本「' + v.name + '」')) return;
+    applyVersion(v);
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  }
+
+  function dlJson(name, obj) {
+    const blob = new Blob([JSON.stringify(obj, null, 2)], { type: 'application/json' });
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = (name || '下载').replace(/[\\/:*?"<>|]/g, '_') + '.json';
+    document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(() => URL.revokeObjectURL(a.href), 800);
+  }
+  function exportVersion(v) { dlJson(v.name, { kind: V.KIND, version: V.clone(v) }); }
+  function renameVersion(v) {
+    const n = (prompt('新版本名(主页显示):', v.name) || '').trim();
+    if (!n) { toast('名字不能为空'); return; }
+    if (n === v.name) return;
+    store.saveVersions(V.rename(store.versions(), v.id, n));
+    if (C.draftVid === v.id) { C.draftName = n; }
+    renderVersionList(); noteWorkChanged(); toast('已改名「' + n + '」');
+  }
+  function dupVersion(v) {
+    store.saveVersions(V.duplicate(store.versions(), v));
+    renderVersionList(); toast('已复制「' + v.name + ' 副本」');
+  }
+  function delVersion(v) {
+    if (!confirm('删除版本「' + v.name + '」? 该份完整配置将从本机移除(自定义赛制模板不受影响)。')) return;
+    store.saveVersions(V.remove(store.versions(), v.id));
+    if (C.draftVid === v.id) {
+      C.draftVid = null; C.draftName = '';
+      C.dirty = false;
+      C.snapSess = JSON.stringify(store.session());
+      C.snapApp = JSON.stringify(APPEAR.state());
+    }
+    renderVersionList(); noteWorkChanged(); toast('已删除');
+  }
+
+  function addVersionJson(raw) {
+    const cv = V.validate(raw);
+    if (!cv.ok) { toast('版本文件不完整:' + (cv.errors[0] || '')); return; }
+    const fv = P.validate(raw.fmt);
+    if (!fv.ok) { toast('版本内赛制无效:' + (fv.errors[0] || '')); return; }
+    const rec = V.clone(raw);
+    rec.id = V.newId(); rec.updated = Date.now();
+    rec.name = (rec.name || '').trim() || '未命名比赛';
+    rec.fmt = P.copyOf(rec.fmt);
+    rec.session = Object.assign(DEF_SESSION(), rec.session || {});
+    rec.appearance = Appearance.normalize(rec.appearance == null ? null : rec.appearance);
+    store.saveVersions(V.upsert(store.versions(), rec));
+    renderVersionList(); toast('已导入版本「' + rec.name + '」');
+  }
+  function importVersionFile(file) {
+    if (!file) return;
+    const r = new FileReader();
+    r.onload = () => {
+      let d; try { d = JSON.parse(r.result); } catch (e) { toast('文件不是合法 JSON'); return; }
+      if (!V.isVersionExport(d)) { toast('该文件不是完整版本。只含赛制的文件请用「卡2 导入赛制 JSON」。'); return; }
+      addVersionJson(d.version);
+    };
+    r.onerror = () => toast('读取文件失败');
+    r.readAsText(file);
+  }
+
+  function rowBtn(label, cls, fn) {
+    const b = document.createElement('button');
+    b.type = 'button'; b.textContent = label;
+    b.className = cls ? ('btn ' + cls) : 'btn btn-small';
+    b.onclick = fn;
+    return b;
+  }
+  function renderVersionList() {
+    const box = $('version-list'); if (!box) return;
+    const list = store.versions();
+    box.innerHTML = '';
+    if (!list.length) {
+      const em = document.createElement('div');
+      em.className = 'ver-empty';
+      em.textContent = '还没有已保存的版本。配置好后点下方「保存为新版本」即在此列出。';
+      box.appendChild(em);
+      return;
+    }
+    list.forEach((v) => {
+      const row = document.createElement('div');
+      row.className = 'ver-item' + (C.draftVid === v.id ? ' sel' : '');
+      const main = document.createElement('div'); main.className = 'ver-main';
+      const nm = document.createElement('span'); nm.className = 'ver-name'; nm.textContent = v.name;
+      const dt = new Date(v.updated || Date.now());
+      const p2 = (n) => String(n).padStart(2, '0');
+      const upd = document.createElement('span'); upd.className = 'ver-upd';
+      upd.textContent = (dt.getMonth() + 1) + '-' + p2(dt.getDate()) + ' ' + p2(dt.getHours()) + ':' + p2(dt.getMinutes());
+      main.append(nm, upd);
+      const act = document.createElement('div'); act.className = 'ver-actions';
+      act.appendChild(rowBtn('▶ 开始', 'ver-go', () => startVersion(v)));
+      act.appendChild(rowBtn('修改', 'btn-small', () => editVersion(v)));
+      act.appendChild(rowBtn('改名', 'btn-small', () => renameVersion(v)));
+      act.appendChild(rowBtn('复制', 'btn-small', () => dupVersion(v)));
+      act.appendChild(rowBtn('导出', 'btn-small', () => exportVersion(v)));
+      act.appendChild(rowBtn('删除', 'btn-small btn-danger', () => delVersion(v)));
+      row.append(main, act);
+      box.appendChild(row);
+    });
+  }
+
+  function blankNew() {
+    if (!confirmDiscard('新建空白版本')) return;
+    const s = DEF_SESSION();
+    store.saveSession(s);
+    APPEAR.clear();
+    const fb = P.BUILTINS[0];
+    setCur(fb, null, '内置·' + fb.name);
+    C.draftVid = null; C.draftName = '';
+    C.dirty = false;
+    C.snapSess = JSON.stringify(s);
+    C.snapApp = JSON.stringify(Appearance.normalize(null));
+    syncMetaUI(); renderList(); renderRows(); updatePoolLine(); updateSrcLabel();
+    repaintSessionUI(); apSyncControls(); renderVersionList(); refreshWorkingUI();
+    persistDraft();
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+    toast('已清空为空白草稿,可开始配置新的一场');
+  }
+
+  // 打开页面时决定工作区:老数据迁移种子 → 或恢复上次草稿 → 或全新默认
+  function bootstrapWorking() {
+    const versions = store.versions();
+    const draft = store.draft();
+    if (!draft && !versions.length) {
+      const liveHas = sessionHasContent() || !Appearance.isDefault(APPEAR.state());
+      if (liveHas) {
+        setCur(P.BUILTINS[0], null, '内置·' + P.BUILTINS[0].name);
+        C.selKey = { kind: 'builtin', i: 0 };
+        const s = store.session(), ap = APPEAR.state();
+        const rec = V.wrap((s.eventTitle || '').trim() || '未命名比赛', curFmt(), s, ap);
+        store.saveVersions(V.upsert(versions, rec));
+        C.draftVid = rec.id; C.draftName = rec.name;
+        C.snapSess = JSON.stringify(rec.session); C.snapApp = JSON.stringify(rec.appearance);
+        C.cur.pristine = JSON.stringify(rec.fmt);
+        store.saveDraft({ vid: rec.id, name: rec.name, fmt: curFmt() });   // 立刻落草稿,下次打开可恢复
+        return;
+      }
+    }
+    if (draft && draft.fmt && draft.fmt.stages && draft.fmt.name) {
+      const version = draft.vid ? V.find(versions, draft.vid) : null;
+      setCur(draft.fmt, null, version ? '版本·' + version.name : (draft.fmt.name || '草稿'));
+      C.selKey = { kind: 'blank' };
+      C.draftVid = version ? draft.vid : null;
+      C.draftName = version ? version.name : (draft.name || '');
+      if (version) {
+        C.cur.pristine = JSON.stringify(version.fmt);          // 基线=版本里存的,才能判"改过没"
+        C.snapSess = JSON.stringify(version.session || {});
+        C.snapApp = JSON.stringify(version.appearance || {});
+      } else {
+        C.snapSess = JSON.stringify(store.session());
+        C.snapApp = JSON.stringify(APPEAR.state());
+      }
+      C.dirty = JSON.stringify(curFmt()) !== C.cur.pristine;
+      return;
+    }
+    setCur(P.BUILTINS[0], null, '内置·' + P.BUILTINS[0].name);
+    C.selKey = { kind: 'builtin', i: 0 };
+    C.draftVid = null; C.draftName = '';
+    C.snapSess = JSON.stringify(store.session());
+    C.snapApp = JSON.stringify(APPEAR.state());
+  }
+
+  // ---------- 对外:供 app 使用 ----------
+  const API = {
+    store, curFmt, markDirty,
+    sessionCopy() { return store.session(); },
+    currentCopy() { return P.copyOf(curFmt()); },
+    validateCurrent() { return P.validate(curFmt()); },
+    appearanceStore: APPEAR,
+    init() {
+      if (C.cur) return;
+      bootstrapWorking();          // 迁移种子/恢复草稿/全新默认 → 定 C.cur + 挂载版本 + 快照
+      bindSessionFields(); bindArt();
+      apBuildChipGroup('ap-preset-topic', AP_TOPIC_PRESETS, 'topic');
+      apBuildChipGroup('ap-preset-teams', AP_TEAMS_PRESETS, 'teams');
+      apBuildStyles(); apBindDrag();
+      const shadowBox = $('ap-shadow');
+      if (shadowBox) shadowBox.addEventListener('change', () => {
+        const a = APPEAR.state(); a.shadow = shadowBox.checked; APPEAR.save(a);
+        apMsg(shadowBox.checked ? '已开启文字投影' : '已关闭文字投影(浅背景时更干净)');
+      });
+      const resetBtn = $('btn-ap-reset');
+      if (resetBtn) resetBtn.addEventListener('click', () => {
+        APPEAR.clear(); apSyncControls(); apMsg('已恢复默认外观');
+      });
+      apSyncControls();
+      $('btn-add').onclick = () => addRow('statement');
+      $('btn-add-img').onclick = () => addRow('image');
+      $('btn-add-text').onclick = () => addRow('text');
+      $('btn-ins-cover').onclick = ensureCover;
+      $('btn-append-end').onclick = ensureEnd;
+      $('btn-allpool').onclick = poolAll;
+      $('btn-save').onclick = saveCustom;
+      $('btn-export').onclick = doExport;
+      $('btn-del-custom').onclick = deleteCustom;
+      $('file-import').addEventListener('change', (e) => { doImport(e.target.files && e.target.files[0]); e.target.value = ''; });
+      $('fmt-name').addEventListener('change', () => { curFmt().name = $('fmt-name').value; markDirty(); updateSrcLabel(); });
+      $('fmt-warning').addEventListener('change', () => { curFmt().warningSec = Number($('fmt-warning').value); markDirty(); updateSrcLabel(); });
+      $('pool-aff').addEventListener('change', () => applyBudget('aff'));
+      $('pool-neg').addEventListener('change', () => applyBudget('neg'));
+      const vNew = $('btn-ver-new'); if (vNew) vNew.onclick = blankNew;
+      const vSave = $('btn-ver-save'); if (vSave) vSave.onclick = saveVersion;
+      const vImp = $('file-ver-import'); if (vImp) vImp.addEventListener('change', (e) => { importVersionFile(e.target.files && e.target.files[0]); e.target.value = ''; });
+      renderList(); syncMetaUI(); renderRows(); updatePoolLine(); updateSrcLabel();
+      renderVersionList(); refreshWorkingUI();
+    },
+  };
+  function applyBudget(side) {
+    const v = P.parseSec($('pool-' + side).value);
+    if (Number.isNaN(v) || v <= 0) { toast('总预算需 > 0,如 18:00'); $('pool-' + side).value = P.fmtSec(curFmt().poolPerSideSec[side]); return; }
+    curFmt().poolPerSideSec[side] = v;
+    $('pool-' + side).value = P.fmtSec(v);
+    markDirty(); updateSrcLabel();
+  }
+
+  root.DT = API;
+})(typeof self !== 'undefined' ? self : this);
+
+// DOM 就绪即初始化(脚本位于 body 末尾)
+document.addEventListener('DOMContentLoaded', () => window.DT.init());
+
+</script>
+  <script>
+// 辩论赛计时器 · 应用主控(设置/投屏 + 音频 + 全屏 + 主循环)
+// 投屏只有一面 #screen-timing:按当前环节类型呈现三种形态之一——
+//   计时环节:辩题/队名 + 环节名 + 双方时钟(可换边/暂停);
+//   图文环节:全屏该环节自带的整幅图(无图回退内置底色);
+//   文字环节:计时页全局背景 + 居中多行文字。
+// 封面/结束 不再是独立屏,只是排进环节链的首/末图文行,由「上一环/下一环」推进。
+(function (root) {
+  'use strict';
+  const Engine = root.DebateEngine;
+  const P = root.Presets;
+  const DT = root.DT;
+  const $ = (id) => document.getElementById(id);
+  const SIDE_LABEL = { aff: '正方', neg: '反方' };
+  const toast = (msg) => {
+    const t = $('toast');
+    t.textContent = msg; t.classList.remove('hidden');
+    clearTimeout(toast._h); toast._h = setTimeout(() => t.classList.add('hidden'), 2600);
+  };
+
+  // ---------- 音频(WebAudio,免素材;首个用户手势解锁) ----------
+  const Sound = (() => {
+    let ctx = null, enabled = true;
+    function ensure() {
+      if (!ctx) { try { ctx = new (window.AudioContext || window.webkitAudioContext)(); } catch (e) { return null; } }
+      if (ctx.state === 'suspended') ctx.resume();
+      return ctx;
+    }
+    function tone(c, t, freq, dur, vol) {
+      const o = c.createOscillator(), g = c.createGain();
+      o.type = 'sine'; o.frequency.value = freq;
+      g.gain.setValueAtTime(0.0001, t);
+      g.gain.exponentialRampToValueAtTime(vol || 0.4, t + 0.015);
+      g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+      o.connect(g); g.connect(c.destination); o.start(t); o.stop(t + dur + 0.03);
+    }
+    function beep(freq, n, dur, gap) {
+      if (!enabled) return;
+      const c = ensure(); if (!c) return;
+      const t0 = c.currentTime;
+      for (let i = 0; i < n; i++) tone(c, t0 + i * (dur + gap), freq, dur);
+    }
+    return {
+      ensure,
+      warn() { beep(880, 2, 0.14, 0.1); },
+      end() { beep(1320, 3, 0.24, 0.12); },
+      test() { beep(880, 1, 0.15, 0.05); setTimeout(() => beep(1320, 2, 0.2, 0.1), 380); },
+      setEnabled(v) { enabled = !!v; },
+      isEnabled() { return enabled; },
+    };
+  })();
+
+  const msText = (ms) => {
+    const s = Math.max(0, Math.ceil(ms / 1000));
+    return Math.floor(s / 60) + ':' + String(s % 60).padStart(2, '0');
+  };
+
+  // ---------- 全局右下角操作栏(悬停展开) ----------
+  // content=true 时环节是图文/文字页:主按钮=「下一环节」,无「时间」组(没有钟可动)
+  const Ops = (() => {
+    let root = null, primaryEl = null;
+    const getRoot = () => { if (!root) root = document.getElementById('ops-root'); return root; };
+    const panel = (label, items) => '<div class="og"><div class="og-t">' + label + '</div>' +
+      items.map((b) => '<button class="og-btn' + (b.d ? ' danger' : '') + '" data-act="' + b.a + '">' + b.l + '</button>').join('') + '</div>';
+
+    function build(content) {
+      const r = getRoot();
+      const groups = content ? [
+          panel('环节', [{ a: 'prev', l: '上一环节' }, { a: 'next', l: '下一环节' }]),
+          panel('画面', [{ a: 'full', l: '全屏' }, { a: 'test', l: '试音' }, { a: 'exit', l: '返回设置' }]),
+        ] : [
+          panel('环节', [{ a: 'prev', l: '上一环节' }, { a: 'next', l: '下一环节' }]),
+          panel('时间', [{ a: 'resetStage', l: '重置本环节' }, { a: 'resetAll', l: '全场重置', d: 1 }]),
+          panel('画面', [{ a: 'full', l: '全屏' }, { a: 'test', l: '试音' }, { a: 'exit', l: '返回设置' }]),
+        ];
+      const primaryAct = content ? 'next' : 'toggle';
+      const primaryLabel = content ? '下一环节' : '开始';
+      r.innerHTML = '<div class="ops"><div class="ops-panel">' + groups.join('') + '</div>' +
+        '<div class="ops-bar"><button class="btn-start dock-main" data-act="' + primaryAct + '">' + primaryLabel + '</button>' +
+        '<button class="ops-dot" data-act="more" title="固定/收起">⋯</button></div></div>';
+      primaryEl = r.querySelector('.dock-main');
+      r.classList.remove('hidden');
+    }
+    function hide() { const r = getRoot(); if (r) r.classList.add('hidden'); }
+    function primaryText(t) { if (primaryEl) primaryEl.textContent = t; }
+    return { build, hide, primaryText };
+  })();
+
+  // ---------- 投屏外观应用(把 dt.appearance 落到真实 DOM) ----------
+  // 铁律:默认外观不加类、不写 inline,视觉与改动前逐像素一致。
+  // 计时环节与纯文字环节都显示页头 → 都套用外观;图文环节整幅图、无页头,不套。
+  const TGT_IDS = {
+    topic: ['t-topic'], teams: ['name-aff', 'name-neg'],
+    stage: ['t-stage'], time: ['time-aff', 'time-neg'], state: ['state-aff', 'state-neg'],
+  };
+  const textIds = () => Object.keys(TGT_IDS).reduce((a, k) => a.concat(TGT_IDS[k]), []);
+  const clampNum = (v, lo, hi) => Math.min(hi, Math.max(lo, v));
+  const hasBox = (el) => { if (!el) return false; const st = getComputedStyle(el); if (st.display === 'none') return false; const r = el.getBoundingClientRect(); return r.width > 2 && r.height > 2; };
+  const clearProps = (el, props) => { if (el) props.forEach((p) => { el.style[p] = ''; }); };
+
+  function resetAppearanceLayout(scr) {
+    scr.classList.remove('userpos');
+    const head = scr.querySelector('.t-head'); if (head) head.style.display = '';
+    clearProps($('t-topic'), ['position', 'top', 'left', 'right', 'transform', 'textAlign', 'paddingLeft', 'paddingRight']);
+    clearProps(scr.querySelector('.t-teams'), ['position', 'top', 'left', 'right', 'transform', 'textAlign', 'paddingLeft', 'paddingRight']);
+    textIds().forEach((id) => { const el = $(id); if (el) { el.style.fontSize = ''; el.style.color = ''; el.style.textShadow = ''; } });
+  }
+
+  // 中央时钟带 = #t-stage + 可见数字的包围盒,上下各让 margin
+  function clockBand(scr) {
+    const sr = scr.getBoundingClientRect();
+    let top = Infinity, bot = -Infinity;
+    ['t-stage', 'time-aff', 'time-neg'].forEach((id) => {
+      const el = $(id); if (!hasBox(el)) return;
+      const r = el.getBoundingClientRect();
+      top = Math.min(top, r.top); bot = Math.max(bot, r.bottom);
+    });
+    if (!isFinite(top)) return { low: 34, high: 56 };   // 兜底(理论上不会走到)
+    const h = sr.height || 1;
+    const margin = Math.max(2, (bot - top) * 0.06) / h * 100;
+    return {
+      low: clampNum((top - sr.top) / h * 100 - margin, 0, 48),
+      high: clampNum((bot - sr.top) / h * 100 + margin, 50, 100),
+    };
+  }
+
+  function styleMoved(el, y, align) {
+    if (!el) return;
+    el.style.position = 'absolute';
+    el.style.left = '0'; el.style.right = '0';
+    el.style.top = clampNum(y, 0, 100) + '%';
+    el.style.transform = 'translateY(-50%)';
+    el.style.textAlign = align;
+    el.style.paddingLeft = align === 'left' ? '6%' : '';
+    el.style.paddingRight = align === 'right' ? '6%' : '';
+  }
+
+  function applyAppearance() {
+    const scr = $('screen-timing');
+    if (!scr) return;
+    resetAppearanceLayout(scr);      // 先还原默认,每次都从原始流式布局重新量测
+    if (scr.classList.contains('content-img')) return;    // 图文环节整幅图、无页头,不套外观
+    const ap = (root.DT && root.DT.appearanceStore) ? root.DT.appearanceStore.get() : Appearance.normalize(null);
+    if (Appearance.isDefault(ap)) return;
+
+    // 1) 颜色 / 字号 / 投影
+    Object.keys(TGT_IDS).forEach((g) => {
+      const s = ap.style[g];
+      const fs = s.size !== 1 ? (Appearance.fontCss(g, s.size) || '') : '';
+      const col = s.color !== Appearance.DEFAULT_COLOR ? s.color : '';
+      TGT_IDS[g].forEach((id) => { const el = $(id); if (el) { el.style.fontSize = fs; el.style.color = col; } });
+    });
+    const sh = ap.shadow ? '' : 'none';
+    textIds().forEach((id) => { const el = $(id); if (el) el.style.textShadow = sh; });
+
+    // 仅当用户真改了位置才启用自定义布局;只改颜色/字号时保持原流式排版
+    if (!Appearance.userPosActive(ap)) return;
+
+    // 2) 位置:先量测当前(默认)流式中心,再套用户位置。
+    //    计时环节有中央时钟带要避让 → 用 clockBand 钳制;
+    //    纯文字环节没有时钟,直接原样保留用户存的位置(顶部/底部都照搬)。
+    const centerPct = (el) => { const r = el.getBoundingClientRect(); const sr = scr.getBoundingClientRect(); return (r.top + r.height / 2 - sr.top) / (sr.height || 1) * 100; };
+    const topicM = hasBox($('t-topic')) ? centerPct($('t-topic')) : 8;
+    const teamsM = hasBox(scr.querySelector('.t-teams')) ? centerPct(scr.querySelector('.t-teams')) : 20;
+    const textStage = scr.classList.contains('content-text');
+    let topicY, teamsY;
+    if (textStage) {
+      topicY = ap.pos.topic ? ap.pos.topic.y : topicM;
+      teamsY = ap.pos.teams ? ap.pos.teams.y : teamsM;
+    } else {
+      const band = clockBand(scr);
+      topicY = Appearance.clampY(ap.pos.topic ? ap.pos.topic.y : topicM, band.low, band.high);
+      teamsY = Appearance.clampY(ap.pos.teams ? ap.pos.teams.y : teamsM, band.low, band.high);
+    }
+    const align = ap.pos.topic ? ap.pos.topic.align : 'center';
+
+    scr.classList.add('userpos');
+    const head = scr.querySelector('.t-head'); if (head) head.style.display = 'contents';
+    styleMoved($('t-topic'), topicY, align);
+    styleMoved(scr.querySelector('.t-teams'), teamsY, 'center');
+  }
+
+  let appearScheduled = false;
+  function scheduleAppearance() {
+    if (appearScheduled) return;
+    appearScheduled = true;
+    requestAnimationFrame(() => { appearScheduled = false; applyAppearance(); });
+  }
+
+  // ---------- 应用状态 ----------
+  const App = {
+    matchFmt: null,   // 本场赛制副本
+    g: null,          // engine 状态
+    sess: null,       // 本场比赛信息快照
+
+    showScreen(name) {
+      document.querySelectorAll('.screen').forEach((s) => s.classList.remove('active'));
+      $('screen-' + name).classList.add('active');
+    },
+
+    // 当前环节所用背景:图文环节→该行自带的图/底色;计时与文字环节→计时页全局背景(卡4)
+    applyStageBg(stage) {
+      const el = $('timer-bg'); if (!el) return;
+      el.classList.remove('preset-blue', 'preset-purple', 'has-img');
+      el.style.backgroundImage = '';
+      let url = null, preset = null;
+      const s = this.sess;
+      if (stage && P.isContent(stage) && stage.type === 'image') {
+        url = stage.imageData || null;
+        preset = url ? null : (stage.bg === 'blue' || stage.bg === 'purple' ? stage.bg : null);
+      } else {
+        url = (s && s.art && s.art.timer) || null;
+        preset = (s && s.bgPreset && s.bgPreset.timer) || null;
+      }
+      if (preset) el.classList.add('preset-' + preset);
+      if (url) { el.style.backgroundImage = 'url("' + url + '")'; el.classList.add('has-img'); }
+    },
+
+    // 顶部辩题/队伍名(计时环节每帧由 render 重填;图文环节整幅图不需要,文字环节要)
+    updateHeader() {
+      const s = this.sess || DT.store.session();
+      const topic = (s.topic || '').trim();
+      const topicEl = $('t-topic');
+      topicEl.textContent = topic;
+      topicEl.classList.toggle('hidden', !topic);
+      Engine.SIDES.forEach((side) => {
+        const team = ((s.teamName[side] || '').trim());
+        $('name-' + side).textContent = team ? SIDE_LABEL[side] + ' · ' + team : SIDE_LABEL[side];
+      });
+    },
+
+    // 每次进入/切换环节时布置画面:切 content 形态、填文字/页头、铺背景、重建操作栏
+    enterStageUI() {
+      const g = this.g;
+      const scr = $('screen-timing');
+      const stage = g ? g.format.stages[g.idx] : null;
+      const content = stage ? P.isContent(stage) : false;
+      scr.classList.remove('content-mode', 'content-img', 'content-text');
+      scr.classList.remove('solo');                  // 时钟形态由 render 每帧重算,先复位
+      if (content) {
+        scr.classList.add('content-mode');
+        scr.classList.add(stage.type === 'image' ? 'content-img' : 'content-text');
+        if (stage.type === 'text') this.updateHeader();   // 纯文字环节仍显示辩题/队名
+      }
+      this.applyStageBg(stage);
+      const sl = $('slide-layer'), msgEl = $('content-msg');
+      if (content && stage.type === 'text') {
+        msgEl.textContent = stage.text || '';
+        sl.style.setProperty('--txt-scale', String(stage.textSize == null ? 1 : stage.textSize));
+      } else {
+        msgEl.textContent = '';
+        sl.style.setProperty('--txt-scale', '1');
+      }
+      Ops.build(content);
+      if (content && stage.type === 'text') applyAppearance();   // 文字环节页头也要吃用户自定义外观
+    },
+
+    // 从设置屏发起本场 → 直接进投屏,首环节即从 0 开始(若首行是图文封面则像旧封面页)
+    start() {
+      const v = DT.validateCurrent();
+      if (!v.ok) { toast('赛制未通过:' + (v.errors[0] || '')); return; }
+      stopLoop();
+      this.matchFmt = DT.currentCopy();
+      this.sess = DT.store.session();
+      this.g = Engine.create(this.matchFmt);
+      this.showScreen('timing');
+      this.enterStageUI();
+      startLoop();
+      scheduleAppearance();
+    },
+
+    exitTiming() {
+      stopLoop(); this.g = null;
+      this.showScreen('setup');
+      Ops.hide();
+    },
+
+    // ---- 主循环回调(每帧 EVAL + 渲染) ----
+    onCue(cue) {
+      // 仅提示音:剩余30s/时间到 都只响铃,不弹气泡
+      if (cue.type === 'warning') Sound.warn();
+      else Sound.end();
+    },
+
+    render() {
+      const g = this.g;
+      if (!g) return;
+      const stage = g.format.stages[g.idx];
+      if (P.isContent(stage)) return;    // 图文/文字环节:画面已由 enterStageUI 布置,不碰时钟
+      const now = performance.now();
+      $('t-stage').textContent = stage.title;
+      this.updateHeader();
+
+      // 本环节参与发言的一方(fixed:有名义时长的方;pool:双方)
+      const parts = stage.mode === 'pool' ? Engine.SIDES.slice()
+        : Engine.SIDES.filter((sd) => (sd === 'aff' ? stage.affSec : stage.negSec) > 0);
+      const solo = parts.length === 1;
+      $('screen-timing').classList.toggle('solo', solo);
+      Engine.SIDES.forEach((side) => {
+        // 非发言方:计时器整格隐藏(队伍名保持显示,不变淡)
+        $('card-' + side).classList.toggle('hidden', parts.indexOf(side) < 0);
+      });
+
+      const runId = g.active && g.clocks[g.active].status === 'running' ? g.active : null;
+
+      Engine.SIDES.forEach((side) => {
+        const c = g.clocks[side];
+        const ms = Engine.remainingMs(g, side, now);
+        $('time-' + side).textContent = msText(ms);
+        // 数字下方只在“时间到”时提示,其余保持空白
+        $('state-' + side).textContent = c.status === 'finished' ? '时间到' : '';
+        // 仅“对辩(自由辩论)”环节:不发言一方的数字半透明
+        const off = stage.type === 'free-debate' && !!runId && side !== runId;
+        $('card-' + side).classList.toggle('off', off);
+      });
+
+      Ops.primaryText(runId ? '暂停' : '开始');
+    },
+
+    // ---- dock 动作 ----
+    dispatch(type, payload) {
+      if (!this.g) return;
+      const r = Engine.dispatch(this.g, Object.assign({ type }, payload || {}), performance.now());
+      this.g = r.state;
+      r.cues.forEach((cue) => this.onCue(cue));
+      this.render();
+    },
+    switchTo(side) {
+      if (!this.g) return;
+      this.dispatch('SWITCH', { side });
+      if (this.g.active !== side) toast(SIDE_LABEL[side] + ' 已无时间或本环节无此方');
+    },
+    goNext() {
+      const g = this.g; if (!g) return;
+      this.dispatch('NEXT');            // 引擎在首/末环节自动钳制,不越界
+      this.enterStageUI();
+      scheduleAppearance();
+    },
+    goPrev() { if (!this.g) return; this.dispatch('PREV'); this.enterStageUI(); scheduleAppearance(); },
+    resetAll() {
+      this.g = Engine.create(this.matchFmt);
+      this.enterStageUI();
+      this.render();
+      scheduleAppearance();
+    },
+
+    fullscreen() {
+      if (document.fullscreenElement) document.exitFullscreen();
+      else if (document.documentElement.requestFullscreen) {
+        document.documentElement.requestFullscreen().catch(() => toast('无法进入全屏'));
+      }
+    },
+    // 卡4 计时背景在比赛中途被改时即时刷新当前环节背景
+    onArtChange() {
+      if (!this.g) return;
+      this.sess = DT.store.session();
+      this.applyStageBg(this.g.format.stages[this.g.idx]);
+    },
+  };
+
+  let raf = 0;
+  function startLoop() {
+    if (raf) cancelAnimationFrame(raf);
+    raf = requestAnimationFrame(onFrame);
+  }
+  function stopLoop() {
+    if (raf) { cancelAnimationFrame(raf); raf = 0; }
+  }
+  function onFrame() {
+    const now = performance.now();
+    const r = Engine.dispatch(App.g, { type: 'EVAL' }, now);
+    App.g = r.state;
+    r.cues.forEach((cue) => App.onCue(cue));
+    App.render();
+    raf = requestAnimationFrame(onFrame);
+  }
+
+  // ---------- 操作栏动作路由 ----------
+  function runAction(act) {
+    switch (act) {
+      case 'more': {
+        const ops = document.querySelector('#ops-root .ops');
+        if (ops) ops.classList.toggle('open');
+        break;
+      }
+      case 'full': App.fullscreen(); break;
+      case 'test': Sound.ensure(); Sound.test(); break;
+      case 'toggle': Sound.ensure(); App.dispatch('TOGGLE'); break;
+      case 'prev': App.goPrev(); break;
+      case 'next': App.goNext(); break;
+      case 'resetStage': App.dispatch('RESET_STAGE'); break;
+      case 'resetAll':
+        if (App.matchFmt && confirm('全场重置:回到第 1 环节并恢复全部时间?')) App.resetAll();
+        break;
+      case 'exit':
+        if (confirm('返回设置页(本场进度将丢弃)?')) App.exitTiming();
+        break;
+      default: break;
+    }
+  }
+
+  function bind() {
+    $('btn-start').addEventListener('click', () => App.start());
+
+    // 全局操作栏点击委托
+    document.addEventListener('click', (e) => {
+      const btn = e.target.closest('#ops-root [data-act]');
+      if (btn) { runAction(btn.getAttribute('data-act')); return; }
+      // 点别处收起固定面板
+      if (!e.target.closest('#ops-root')) {
+        const ops = document.querySelector('#ops-root .ops');
+        if (ops) ops.classList.remove('open');
+      }
+    });
+
+    // 换边:点想发言的一方卡片即可(接棒续跑由引擎处理)
+    Engine.SIDES.forEach((side) => {
+      $('card-' + side).addEventListener('click', () => App.switchTo(side));
+    });
+
+    // 窗口尺寸变化时,按 % 存储本身自适,但仍重算钳制带
+    window.addEventListener('resize', scheduleAppearance);
+  }
+
+  root.AppAPI = { onArtChange(k, url) { App.onArtChange(); } };
+  document.addEventListener('DOMContentLoaded', bind);
+})(typeof self !== 'undefined' ? self : this);
+
+</script>
+</body>
+</html>

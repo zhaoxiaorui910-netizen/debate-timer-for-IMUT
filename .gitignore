@@ -1,0 +1,5 @@
+# 本地工作文件,不发布
+.claude/
+reference/
+# 体积大的压缩包,用 release/辩论赛计时器.html 单文件分发即可
+release/*.zip
