@@ -22,8 +22,13 @@
 
 ## 内容环节携带的负载
 - `image` 行:`imageData`(该行自带的 JPEG dataURL)或 `bg`('blue'|'purple'|null),无图时用该底色/默认底;投屏整幅占满,**连顶部辩题/队名都盖掉**
-- `text` 行:`text`(多行)+ `textSize`(字号档,夹 [0.5,2]);投屏用计时页背景 + 居中文字,**顶部仍保留辩题/队名且跟随投屏外观的拖位**(文字区下移避让页头)
+- `text` 行:`text`(多行)+ `textSize`(字号档,夹 [0.5,2]);投屏用计时页背景 + 居中文字,**顶部仍保留辩题/队名且跟随投屏外观的 x/y 拖位**(文字区下移避让页头)
 - 图片存进 stage 对象 → 随赛制/版本 JSON 走(体积增大是已知取舍);内容行可回退为内置底色
+
+## 投屏外观的位置模型(`appearance.js` 的 `pos`,随版本 JSON 走)
+- `pos.topic = {x, y}`:x/y 均为百分比(0-100),`x` 是辩题块心,默认 50;旧数据只有 `align` 时按 `ALIGN_X`(left→12/center→50/right→88)折算成 x
+- `pos.teams = {x, y}`:`x` 是**正方块心**,反方块心恒为 `100 - x`(以屏幕中线镜像),两方共用同一个 `y`;`x` 上限 50(正方不越中线),**`x === null` 表示「水平沿用默认」= 正方贴左 / 反方贴右**
+- 两者均为 `null` 表示未自定义 → 不写任何 inline、不加 `.userpos`,投屏保持原 CSS 流式布局(视觉铁律);渲染只在 `app.js` 的 `applyAppearance`(队名有 x 时容器退成 `display:contents`,两方各自 `styleMoved`)
 
 ## 纪律
 - 改 `engine.js` 前先改 `tests/engine.test.js`,全绿才提交

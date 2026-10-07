@@ -100,8 +100,13 @@
   function resetAppearanceLayout(scr) {
     scr.classList.remove('userpos');
     const head = scr.querySelector('.t-head'); if (head) head.style.display = '';
-    clearProps($('t-topic'), ['position', 'top', 'left', 'right', 'transform', 'textAlign', 'paddingLeft', 'paddingRight']);
-    clearProps(scr.querySelector('.t-teams'), ['position', 'top', 'left', 'right', 'transform', 'textAlign', 'paddingLeft', 'paddingRight']);
+    const teamsEl = scr.querySelector('.t-teams');
+    if (teamsEl) teamsEl.style.display = '';       // 队名左右分置时会退成 contents
+    const MOVED = ['position', 'top', 'left', 'right', 'transform', 'textAlign'];
+    clearProps($('t-topic'), MOVED);
+    clearProps(teamsEl, MOVED);
+    clearProps($('name-aff'), MOVED);
+    clearProps($('name-neg'), MOVED);
     textIds().forEach((id) => { const el = $(id); if (el) { el.style.fontSize = ''; el.style.color = ''; el.style.textShadow = ''; } });
   }
 
@@ -123,15 +128,15 @@
     };
   }
 
-  function styleMoved(el, y, align) {
+  // 块满宽(.userpos 下 left:0/right:0/width:100%),故 translateX(x-50%) 的百分比即屏宽比例:
+  // x=50 平移 0(与默认居中逐像素一致),x=0/100 时块心贴到屏幕左/右边缘。
+  function styleMoved(el, x, y) {
     if (!el) return;
     el.style.position = 'absolute';
     el.style.left = '0'; el.style.right = '0';
     el.style.top = clampNum(y, 0, 100) + '%';
-    el.style.transform = 'translateY(-50%)';
-    el.style.textAlign = align;
-    el.style.paddingLeft = align === 'left' ? '6%' : '';
-    el.style.paddingRight = align === 'right' ? '6%' : '';
+    el.style.transform = 'translate(' + (clampNum(x, 0, 100) - 50) + '%, -50%)';
+    el.style.textAlign = 'center';
   }
 
   function applyAppearance() {
@@ -171,12 +176,23 @@
       topicY = Appearance.clampY(ap.pos.topic ? ap.pos.topic.y : topicM, band.low, band.high);
       teamsY = Appearance.clampY(ap.pos.teams ? ap.pos.teams.y : teamsM, band.low, band.high);
     }
-    const align = ap.pos.topic ? ap.pos.topic.align : 'center';
+    const topicX = ap.pos.topic ? ap.pos.topic.x : Appearance.DEFAULT_X;
 
     scr.classList.add('userpos');
     const head = scr.querySelector('.t-head'); if (head) head.style.display = 'contents';
-    styleMoved($('t-topic'), topicY, align);
-    styleMoved(scr.querySelector('.t-teams'), teamsY, 'center');
+    styleMoved($('t-topic'), topicX, topicY);
+
+    // 队名:x 为 null(未设水平)→ 整块仍走原 grid,只应用 y;有 x → 容器退成 contents,
+    // 正/反两方各自绝对定位在 x 与 100-x(以屏幕中线镜像),两方共用同一个 y。
+    const teamsEl = scr.querySelector('.t-teams');
+    const teamsX = ap.pos.teams ? ap.pos.teams.x : null;
+    if (teamsX == null || !teamsEl) {
+      styleMoved(teamsEl, Appearance.DEFAULT_X, teamsY);
+    } else {
+      teamsEl.style.display = 'contents';
+      styleMoved($('name-aff'), teamsX, teamsY);
+      styleMoved($('name-neg'), 100 - teamsX, teamsY);
+    }
   }
 
   let appearScheduled = false;

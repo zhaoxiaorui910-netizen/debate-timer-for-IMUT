@@ -536,14 +536,6 @@
     ['time', '计时数字'], ['stage', '环节名'], ['topic', '辩题'],
     ['teams', '队伍名'], ['state', '时间到提示'],
   ];
-  const AP_TOPIC_PRESETS = [
-    { l: '顶部·左', y: 7, a: 'left' }, { l: '顶部·中', y: 7, a: 'center' }, { l: '顶部·右', y: 7, a: 'right' },
-    { l: '底部·左', y: 90, a: 'left' }, { l: '底部·中', y: 90, a: 'center' }, { l: '底部·右', y: 90, a: 'right' },
-    { l: '默认', y: null, a: null },
-  ];
-  const AP_TEAMS_PRESETS = [
-    { l: '顶部', y: 16 }, { l: '底部', y: 92 }, { l: '默认', y: null },
-  ];
   const APPEAR = {
     state() { return Appearance.normalize(read(K_APPEAR, null)); },
     get() { return this.state(); },
@@ -552,57 +544,54 @@
   };
   const ap = $;
   const clampN = (v, lo, hi) => Math.min(hi, Math.max(lo, v));
-  const apXOf = (align) => (align === 'left' ? 12 : align === 'right' ? 88 : 50);
+
+  // 假屏预览:辩题一个手柄;队名两个手柄(正方/反方),拖任一方另一方按屏幕中线镜像。
+  // 队名未设水平(teams.x == null)时,预览手柄落在贴左右边的位置;辩题默认落在顶部居中。
+  const AP_TOPIC_DEF = { x: 50, y: 8 };
+  const AP_TEAMS_DEF = { x: null, y: 20 };
+  const AP_SIDE_DEF_X = 10;          // x 为 null 时四方手柄的显示位置(仅预览用,不写进数据)
 
   function apPaint() {
     const a = APPEAR.state();
-    const topic = a.pos.topic || { y: 8, align: 'center' };
-    const teams = a.pos.teams || { y: 20 };
-    const tEl = ap('ap-drag-topic'), gEl = ap('ap-drag-teams');
-    if (!tEl || !gEl) return;
-    tEl.style.left = apXOf(topic.align) + '%'; tEl.style.top = topic.y + '%';
-    gEl.style.left = '50%'; gEl.style.top = teams.y + '%';
+    const topic = a.pos.topic || AP_TOPIC_DEF;
+    const teams = a.pos.teams || AP_TEAMS_DEF;
+    const tEl = ap('ap-drag-topic'), affEl = ap('ap-drag-aff'), negEl = ap('ap-drag-neg');
+    if (!tEl || !affEl || !negEl) return;
+    const affX = teams.x == null ? AP_SIDE_DEF_X : teams.x;
+    const negX = teams.x == null ? 100 - AP_SIDE_DEF_X : 100 - teams.x;
+    tEl.style.left = topic.x + '%'; tEl.style.top = topic.y + '%';
+    affEl.style.left = affX + '%'; affEl.style.top = teams.y + '%';
+    negEl.style.left = negX + '%'; negEl.style.top = teams.y + '%';
     tEl.style.color = a.style.topic.color;
-    gEl.style.color = a.style.teams.color;
+    affEl.style.color = a.style.teams.color;
+    negEl.style.color = a.style.teams.color;
     tEl.style.fontSize = Appearance.fontCss('topic', a.style.topic.size) || '';
-    gEl.style.fontSize = Appearance.fontCss('teams', a.style.teams.size) || '';
+    const tfs = Appearance.fontCss('teams', a.style.teams.size) || '';
+    affEl.style.fontSize = tfs; negEl.style.fontSize = tfs;
   }
-  function apChipEq(p, cur, kind) {
-    if (p.y == null) return cur == null;
-    if (cur == null) return false;
-    return p.y === cur.y && (kind === 'topic' ? p.a === cur.align : true);
-  }
-  function apSyncChips() {
+  // 「水平居中」:辩题 x 回 50;队名 x 回 null(= 水平沿用默认的贴左右边)。
+  // 未自定义过(y 也还没设)时该元素本来就在默认位置,只提示不动数据。
+  function apCenterPos(kind) {
     const a = APPEAR.state();
-    const mark = (containerId, presets, cur, kind) => {
-      const box = ap(containerId); if (!box) return;
-      Array.prototype.forEach.call(box.querySelectorAll('.ap-chip'), (b, i) => {
-        b.classList.toggle('sel', apChipEq(presets[i], cur, kind));
-      });
-    };
-    mark('ap-preset-topic', AP_TOPIC_PRESETS, a.pos.topic, 'topic');
-    mark('ap-preset-teams', AP_TEAMS_PRESETS, a.pos.teams, 'teams');
+    const cur = a.pos[kind];
+    if (!cur) { apMsg(kind === 'topic' ? '辩题已在默认位置(顶部居中)' : '队名已在默认左右位置'); return; }
+    if (kind === 'topic') a.pos.topic = { x: Appearance.DEFAULT_X, y: cur.y };
+    else a.pos.teams = { x: null, y: cur.y };
+    APPEAR.save(a); apPaint();
+    apMsg(kind === 'topic' ? '辩题已水平居中' : '队名已恢复到左右默认水平位置');
   }
-  function apBuildChipGroup(containerId, presets, kind) {
-    const box = ap(containerId); if (!box) return;
-    box.innerHTML = '';
-    const label = document.createElement('span');
-    label.className = 'ap-chips-label';
-    label.textContent = kind === 'topic' ? '辩题位置:' : '队伍名位置:';
-    box.appendChild(label);
-    presets.forEach((p) => {
-      const b = document.createElement('button');
-      b.type = 'button'; b.className = 'ap-chip'; b.textContent = p.l;
-      b.addEventListener('click', () => {
-        const a = APPEAR.state();
-        if (p.y == null) a.pos[kind] = null;
-        else if (kind === 'topic') a.pos[kind] = { y: p.y, align: p.a };
-        else a.pos[kind] = { y: p.y };
-        APPEAR.save(a); apSyncChips(); apPaint();
-        apMsg(p.l === '默认' ? '已恢复该元素默认位置' : '已设为「' + p.l + '」,开始比赛后生效');
-      });
-      box.appendChild(b);
-    });
+  function apResetPos(kind) {
+    const a = APPEAR.state();
+    a.pos[kind] = null;
+    APPEAR.save(a); apPaint();
+    apMsg(kind === 'topic' ? '已恢复辩题默认位置' : '已恢复队名默认位置');
+  }
+  function apBindPosButtons() {
+    const wire = (id, fn) => { const el = ap(id); if (el) el.addEventListener('click', fn); };
+    wire('ap-center-topic', () => apCenterPos('topic'));
+    wire('ap-reset-topic', () => apResetPos('topic'));
+    wire('ap-center-teams', () => apCenterPos('teams'));
+    wire('ap-reset-teams', () => apResetPos('teams'));
   }
   function apBuildStyles() {
     const box = ap('ap-style-rows'); if (!box) return;
@@ -647,7 +636,7 @@
   function apSyncControls() {
     const a = APPEAR.state();
     const sh = ap('ap-shadow'); if (sh) sh.checked = a.shadow;
-    apSyncStyles(); apSyncChips(); apPaint();
+    apSyncStyles(); apPaint();
   }
   function apMsg(text) {
     const m = ap('ap-msg'); if (!m) return;
@@ -656,7 +645,8 @@
   }
   function apBindDrag() {
     const canvas = ap('ap-preview'); if (!canvas) return;
-    [['ap-drag-topic', 'topic'], ['ap-drag-teams', 'teams']].forEach(([id, kind]) => {
+    // mirror=true 表示拖的是反方手柄:指针位置要折回正方块心(100 - px)
+    const bind = (id, kind, mirror) => {
       const el = document.getElementById(id); if (!el) return;
       el.addEventListener('pointerdown', (ev) => {
         ev.preventDefault();
@@ -666,13 +656,16 @@
       el.addEventListener('pointermove', (ev) => {
         if (el.dataset.drag !== '1') return;
         const r = canvas.getBoundingClientRect();
-        const x = clampN((ev.clientX - r.left) / r.width * 100, 0, 100);
+        const px = clampN((ev.clientX - r.left) / r.width * 100, 0, 100);
         const y = Math.round(Appearance.clampY((ev.clientY - r.top) / r.height * 100, 34, 56) * 10) / 10;
         const a = APPEAR.state();
         if (kind === 'topic') {
-          a.pos.topic = { y, align: x < 30 ? 'left' : x > 70 ? 'right' : 'center' };
-        } else { a.pos.teams = { y }; }
-        APPEAR.save(a); apSyncChips(); apPaint();
+          a.pos.topic = { x: Math.round(px * 10) / 10, y };
+        } else {
+          const affX = mirror ? 100 - px : px;   // 反方手柄 → 折回正方块心
+          a.pos.teams = { x: clampN(Math.round(affX * 10) / 10, 0, Appearance.TEAMS_X_MAX), y };
+        }
+        APPEAR.save(a); apPaint();
       });
       const endDrag = (ev) => {
         if (el.dataset.drag !== '1') return;
@@ -681,7 +674,10 @@
       };
       el.addEventListener('pointerup', endDrag);
       el.addEventListener('pointercancel', endDrag);
-    });
+    };
+    bind('ap-drag-topic', 'topic', false);
+    bind('ap-drag-aff', 'teams', false);
+    bind('ap-drag-neg', 'teams', true);
   }
 
   // ---------- 版本 / 自动草稿 ----------
@@ -970,9 +966,7 @@
       if (C.cur) return;
       bootstrapWorking();          // 迁移种子/恢复草稿/全新默认 → 定 C.cur + 挂载版本 + 快照
       bindSessionFields(); bindArt();
-      apBuildChipGroup('ap-preset-topic', AP_TOPIC_PRESETS, 'topic');
-      apBuildChipGroup('ap-preset-teams', AP_TEAMS_PRESETS, 'teams');
-      apBuildStyles(); apBindDrag();
+      apBuildStyles(); apBindDrag(); apBindPosButtons();
       const shadowBox = $('ap-shadow');
       if (shadowBox) shadowBox.addEventListener('change', () => {
         const a = APPEAR.state(); a.shadow = shadowBox.checked; APPEAR.save(a);

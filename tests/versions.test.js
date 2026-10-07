@@ -14,7 +14,7 @@ function eq(name, a, b) {
 
 const fmt = () => ({ name: '赛制A', builtin: false, poolPerSideSec: { aff: 1080, neg: 1080 }, warningSec: 30, stages: [{ title: '立论', type: 'statement', mode: 'fixed', affSec: 180, negSec: 0, leadSide: 'aff', id: '0' }] });
 const sess = () => ({ eventTitle: '第三届', topic: '辩题', teamName: { aff: '正方队', neg: '反方队' }, art: { cover: null, timer: 'data:image/jpeg;base64,xxx', end: null }, bgPreset: { cover: null, timer: null, end: null } });
-const appr = () => ({ pos: { topic: { y: 8, align: 'center' }, teams: null }, style: { topic: { color: '#ffffff', size: 1 } }, shadow: true });
+const appr = () => ({ pos: { topic: { x: 50, y: 8 }, teams: null }, style: { topic: { color: '#ffffff', size: 1 } }, shadow: true });
 
 // ---------- wrap:构建记录且深拷贝 ----------
 {

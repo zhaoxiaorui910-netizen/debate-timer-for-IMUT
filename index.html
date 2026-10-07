@@ -102,18 +102,22 @@
 
         <div class="ap-block">
           <div class="ap-block-h"><span>辩题 / 队伍名位置</span>
-            <span class="muted">在下方假屏上拖动即可;中央灰带为计时区,不可覆盖</span></div>
+            <span class="muted">在下方假屏上拖动即可;虚线为屏幕中线(参照);队名拖一方,另一方左右镜像;中央灰带为计时区,不可覆盖</span></div>
           <div class="ap-preview" id="ap-preview">
             <div class="ap-zone ap-stage-zone" id="ap-zone-stage">环节示例</div>
             <div class="ap-zone ap-clock-zone" id="ap-zone-clock">0:00</div>
+            <div class="ap-centerline"></div>
             <div class="ap-drag ap-drag-topic" id="ap-drag-topic">辩题文字(示例)</div>
-            <div class="ap-drag ap-drag-teams" id="ap-drag-teams">正方 · 示例队</div>
+            <div class="ap-drag ap-drag-side" id="ap-drag-aff">正方 · 示例队</div>
+            <div class="ap-drag ap-drag-side" id="ap-drag-neg">反方 · 示例队</div>
           </div>
           <div class="ap-chips-row">
-            <span class="ap-chips" id="ap-preset-topic"></span>
-          </div>
-          <div class="ap-chips-row">
-            <span class="ap-chips" id="ap-preset-teams"></span>
+            <span class="ap-chips-label">辩题</span>
+            <button type="button" class="ap-chip" id="ap-center-topic">水平居中</button>
+            <button type="button" class="ap-chip" id="ap-reset-topic">恢复默认</button>
+            <span class="ap-chips-label">队名</span>
+            <button type="button" class="ap-chip" id="ap-center-teams">水平居中</button>
+            <button type="button" class="ap-chip" id="ap-reset-teams">恢复默认</button>
           </div>
         </div>
 

@@ -286,7 +286,8 @@ input:focus, select:focus { outline: 2px solid #d9c9a8; }
   transform: translate(-50%, -50%); font-variant-numeric: tabular-nums; }
 .ap-drag {
   position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%);
-  color: #fff; font-size: 13px; font-weight: 600; white-space: nowrap;
+  color: #fff; font-size: 13px; font-weight: 600;
+  white-space: normal; text-align: center; max-width: 86%;
   padding: 3px 10px; border-radius: 999px; cursor: grab; z-index: 2;
   touch-action: none; user-select: none;
   background: rgba(255,255,255,.12); border: 1px dashed rgba(255,255,255,.5);
@@ -294,7 +295,10 @@ input:focus, select:focus { outline: 2px solid #d9c9a8; }
 }
 .ap-drag.dragging { cursor: grabbing; background: rgba(255,255,255,.24); border-style: solid; }
 .ap-drag-topic { border-color: rgba(255,170,150,.7); }
-.ap-drag-teams { background: rgba(90,162,255,.16); border-color: rgba(140,195,255,.7); }
+.ap-drag-side { background: rgba(90,162,255,.16); border-color: rgba(140,195,255,.7); }
+/* 假屏竖向中线:拖动时判断「水平居中」的参照;纯视觉,不拦事件 */
+.ap-centerline { position: absolute; left: 50%; top: 0; bottom: 0; width: 0;
+  border-left: 1px dashed rgba(255,255,255,.30); pointer-events: none; }
 .ap-chips-row { display: flex; align-items: center; flex-wrap: wrap; gap: 6px;
   margin: 2px 0 7px; font-size: 13px; color: #45574f; }
 .ap-chips { display: inline-flex; flex-wrap: wrap; gap: 6px; align-items: center; }
@@ -327,11 +331,14 @@ label.ap-chk { flex-direction: row; align-items: center; gap: 6px;
 #screen-timing.userpos .t-head { display: contents; }
 #screen-timing.userpos #t-topic,
 #screen-timing.userpos .t-teams {
-  position: absolute; left: 0; right: 0; width: 100%;
+  /* width 恒等于屏宽(max-width:none 压掉基础规则的 92vw),app.js 才能用 translateX(x-50%) 精确定位块心 */
+  position: absolute; left: 0; right: 0; width: 100%; max-width: none;
   margin: 0; padding: 0; pointer-events: none;
   color: #fff; text-shadow: 0 1px 8px rgba(0,0,0,.7);
   text-align: center; line-height: 1.4;
 }
+/* 辩题留 4vw 内边距:内容宽仍是 92%,换行宽度与基础规则一致 */
+#screen-timing.userpos #t-topic { padding: 0 4vw; }
 #screen-timing.userpos .t-teams { display: grid; grid-template-columns: 1fr 1fr; gap: 6vw; }
 
 /* ===== 内置背景预设:live 层与缩略图共用同一套变量 ===== */

@@ -293,7 +293,8 @@ input:focus, select:focus { outline: 2px solid #d9c9a8; }
   transform: translate(-50%, -50%); font-variant-numeric: tabular-nums; }
 .ap-drag {
   position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%);
-  color: #fff; font-size: 13px; font-weight: 600; white-space: nowrap;
+  color: #fff; font-size: 13px; font-weight: 600;
+  white-space: normal; text-align: center; max-width: 86%;
   padding: 3px 10px; border-radius: 999px; cursor: grab; z-index: 2;
   touch-action: none; user-select: none;
   background: rgba(255,255,255,.12); border: 1px dashed rgba(255,255,255,.5);
@@ -301,7 +302,10 @@ input:focus, select:focus { outline: 2px solid #d9c9a8; }
 }
 .ap-drag.dragging { cursor: grabbing; background: rgba(255,255,255,.24); border-style: solid; }
 .ap-drag-topic { border-color: rgba(255,170,150,.7); }
-.ap-drag-teams { background: rgba(90,162,255,.16); border-color: rgba(140,195,255,.7); }
+.ap-drag-side { background: rgba(90,162,255,.16); border-color: rgba(140,195,255,.7); }
+/* 假屏竖向中线:拖动时判断「水平居中」的参照;纯视觉,不拦事件 */
+.ap-centerline { position: absolute; left: 50%; top: 0; bottom: 0; width: 0;
+  border-left: 1px dashed rgba(255,255,255,.30); pointer-events: none; }
 .ap-chips-row { display: flex; align-items: center; flex-wrap: wrap; gap: 6px;
   margin: 2px 0 7px; font-size: 13px; color: #45574f; }
 .ap-chips { display: inline-flex; flex-wrap: wrap; gap: 6px; align-items: center; }
@@ -334,11 +338,14 @@ label.ap-chk { flex-direction: row; align-items: center; gap: 6px;
 #screen-timing.userpos .t-head { display: contents; }
 #screen-timing.userpos #t-topic,
 #screen-timing.userpos .t-teams {
-  position: absolute; left: 0; right: 0; width: 100%;
+  /* width 恒等于屏宽(max-width:none 压掉基础规则的 92vw),app.js 才能用 translateX(x-50%) 精确定位块心 */
+  position: absolute; left: 0; right: 0; width: 100%; max-width: none;
   margin: 0; padding: 0; pointer-events: none;
   color: #fff; text-shadow: 0 1px 8px rgba(0,0,0,.7);
   text-align: center; line-height: 1.4;
 }
+/* 辩题留 4vw 内边距:内容宽仍是 92%,换行宽度与基础规则一致 */
+#screen-timing.userpos #t-topic { padding: 0 4vw; }
 #screen-timing.userpos .t-teams { display: grid; grid-template-columns: 1fr 1fr; gap: 6vw; }
 
 /* ===== 内置背景预设:live 层与缩略图共用同一套变量 ===== */
@@ -512,18 +519,22 @@ tr.row-content > td { background: #fbfaf4; }
 
         <div class="ap-block">
           <div class="ap-block-h"><span>辩题 / 队伍名位置</span>
-            <span class="muted">在下方假屏上拖动即可;中央灰带为计时区,不可覆盖</span></div>
+            <span class="muted">在下方假屏上拖动即可;虚线为屏幕中线(参照);队名拖一方,另一方左右镜像;中央灰带为计时区,不可覆盖</span></div>
           <div class="ap-preview" id="ap-preview">
             <div class="ap-zone ap-stage-zone" id="ap-zone-stage">环节示例</div>
             <div class="ap-zone ap-clock-zone" id="ap-zone-clock">0:00</div>
+            <div class="ap-centerline"></div>
             <div class="ap-drag ap-drag-topic" id="ap-drag-topic">辩题文字(示例)</div>
-            <div class="ap-drag ap-drag-teams" id="ap-drag-teams">正方 · 示例队</div>
+            <div class="ap-drag ap-drag-side" id="ap-drag-aff">正方 · 示例队</div>
+            <div class="ap-drag ap-drag-side" id="ap-drag-neg">反方 · 示例队</div>
           </div>
           <div class="ap-chips-row">
-            <span class="ap-chips" id="ap-preset-topic"></span>
-          </div>
-          <div class="ap-chips-row">
-            <span class="ap-chips" id="ap-preset-teams"></span>
+            <span class="ap-chips-label">辩题</span>
+            <button type="button" class="ap-chip" id="ap-center-topic">水平居中</button>
+            <button type="button" class="ap-chip" id="ap-reset-topic">恢复默认</button>
+            <span class="ap-chips-label">队名</span>
+            <button type="button" class="ap-chip" id="ap-center-teams">水平居中</button>
+            <button type="button" class="ap-chip" id="ap-reset-teams">恢复默认</button>
           </div>
         </div>
 
@@ -1021,7 +1032,7 @@ tr.row-content > td { background: #fbfaf4; }
   <script>
 // 辩论赛计时器 · 投屏外观(纯逻辑,node 安全可测)
 // 定义「投屏外观」默认值、归一化与字号换算;不含 DOM / localStorage。
-// 一份外观 = 辩题/队伍名 的位置(pos) + 五组文字的颜色/字号(style) + 投影开关。
+// 一份外观 = 辩题/队伍名 的位置(pos: 百分比 x/y,块心坐标) + 五组文字的颜色/字号(style) + 投影开关。
 // 铁律:全为默认时不产生任何 inline/类 → 计时屏视觉与改动前逐像素一致。
 (function (root) {
   'use strict';
@@ -1036,9 +1047,11 @@ tr.row-content > td { background: #fbfaf4; }
     state: { min: 13, vw: 1.8, max: 20 },
   };
   const GROUPS = ['topic', 'teams', 'stage', 'time', 'state'];
-  const ALIGNS = ['left', 'center', 'right'];
   const DEFAULT_COLOR = '#ffffff';
   const SIZE_MIN = 0.5, SIZE_MAX = 2;
+  const DEFAULT_X = 50;                                    // 辩题块心默认落在屏幕水平中央
+  const TEAMS_X_MAX = 50;                                  // 队名:正方块心上界(不许越过中线,反方取 100-x)
+  const ALIGN_X = { left: 12, center: 50, right: 88 };     // 旧版 align(三档)→ x,仅用于读旧数据
 
   const newStyle = () => ({ color: DEFAULT_COLOR, size: 1 });
   const newDefault = () => ({
@@ -1051,13 +1064,20 @@ tr.row-content > td { background: #fbfaf4; }
   const clamp = (v, lo, hi) => Math.min(hi, Math.max(lo, v));
   const num = (v, d) => (Number.isFinite(v) ? v : d);
 
-  function normPos(v, hasAlign) {
+  // 位置:x/y 均为百分比(0-100)。topic 的 x 是块心(缺省 50 居中,旧数据只有 align 时按 ALIGN_X 折算);
+  // teams 的 x 是「正方块心」(反方块心恒为 100 - x),缺省/非法为 null = 水平沿用默认(正方贴左、反方贴右)。
+  function normPos(v, kind) {
     if (v == null || typeof v !== 'object') return null;
-    const y = clamp(Math.round(num(v.y, NaN) * 10) / 10, 0, 100);
+    const r1 = (n) => Math.round(n * 10) / 10;
+    const y = clamp(r1(num(v.y, NaN)), 0, 100);
     if (!Number.isFinite(y)) return null;
-    const out = { y };
-    if (hasAlign) out.align = ALIGNS.indexOf(v.align) >= 0 ? v.align : 'center';
-    return out;
+    let xv = v.x;
+    if (kind === 'topic') {
+      if (xv == null && v.align != null && ALIGN_X[v.align] != null) xv = ALIGN_X[v.align];
+      return { x: clamp(r1(num(xv, DEFAULT_X)), 0, 100), y };
+    }
+    const n = num(xv, NaN);
+    return { x: Number.isFinite(n) ? clamp(r1(n), 0, TEAMS_X_MAX) : null, y };
   }
 
   function normStyle(s) {
@@ -1073,8 +1093,8 @@ tr.row-content > td { background: #fbfaf4; }
     const out = newDefault();
     if (raw == null || typeof raw !== 'object') return out;
     const p = (raw.pos && typeof raw.pos === 'object') ? raw.pos : {};
-    out.pos.topic = normPos(p.topic, true);
-    out.pos.teams = normPos(p.teams, false);
+    out.pos.topic = normPos(p.topic, 'topic');
+    out.pos.teams = normPos(p.teams, 'teams');
     const st = (raw.style && typeof raw.style === 'object') ? raw.style : {};
     GROUPS.forEach((g) => { out.style[g] = normStyle(st[g]); });
     out.shadow = raw.shadow !== false;
@@ -1112,7 +1132,7 @@ tr.row-content > td { background: #fbfaf4; }
     return (v - lowMax <= highMin - v) ? Math.max(0, lowMax) : Math.min(100, highMin);
   }
 
-  const API = { FONTS, GROUPS, ALIGNS, DEFAULT_COLOR, SIZE_MIN, SIZE_MAX,
+  const API = { FONTS, GROUPS, DEFAULT_COLOR, SIZE_MIN, SIZE_MAX, DEFAULT_X, TEAMS_X_MAX,
                 normalize, isDefault, userPosActive, fontCss, clampY };
   if (typeof module !== 'undefined' && module.exports) module.exports = API;
   else root.Appearance = API;
@@ -1730,14 +1750,6 @@ tr.row-content > td { background: #fbfaf4; }
     ['time', '计时数字'], ['stage', '环节名'], ['topic', '辩题'],
     ['teams', '队伍名'], ['state', '时间到提示'],
   ];
-  const AP_TOPIC_PRESETS = [
-    { l: '顶部·左', y: 7, a: 'left' }, { l: '顶部·中', y: 7, a: 'center' }, { l: '顶部·右', y: 7, a: 'right' },
-    { l: '底部·左', y: 90, a: 'left' }, { l: '底部·中', y: 90, a: 'center' }, { l: '底部·右', y: 90, a: 'right' },
-    { l: '默认', y: null, a: null },
-  ];
-  const AP_TEAMS_PRESETS = [
-    { l: '顶部', y: 16 }, { l: '底部', y: 92 }, { l: '默认', y: null },
-  ];
   const APPEAR = {
     state() { return Appearance.normalize(read(K_APPEAR, null)); },
     get() { return this.state(); },
@@ -1746,57 +1758,54 @@ tr.row-content > td { background: #fbfaf4; }
   };
   const ap = $;
   const clampN = (v, lo, hi) => Math.min(hi, Math.max(lo, v));
-  const apXOf = (align) => (align === 'left' ? 12 : align === 'right' ? 88 : 50);
+
+  // 假屏预览:辩题一个手柄;队名两个手柄(正方/反方),拖任一方另一方按屏幕中线镜像。
+  // 队名未设水平(teams.x == null)时,预览手柄落在贴左右边的位置;辩题默认落在顶部居中。
+  const AP_TOPIC_DEF = { x: 50, y: 8 };
+  const AP_TEAMS_DEF = { x: null, y: 20 };
+  const AP_SIDE_DEF_X = 10;          // x 为 null 时四方手柄的显示位置(仅预览用,不写进数据)
 
   function apPaint() {
     const a = APPEAR.state();
-    const topic = a.pos.topic || { y: 8, align: 'center' };
-    const teams = a.pos.teams || { y: 20 };
-    const tEl = ap('ap-drag-topic'), gEl = ap('ap-drag-teams');
-    if (!tEl || !gEl) return;
-    tEl.style.left = apXOf(topic.align) + '%'; tEl.style.top = topic.y + '%';
-    gEl.style.left = '50%'; gEl.style.top = teams.y + '%';
+    const topic = a.pos.topic || AP_TOPIC_DEF;
+    const teams = a.pos.teams || AP_TEAMS_DEF;
+    const tEl = ap('ap-drag-topic'), affEl = ap('ap-drag-aff'), negEl = ap('ap-drag-neg');
+    if (!tEl || !affEl || !negEl) return;
+    const affX = teams.x == null ? AP_SIDE_DEF_X : teams.x;
+    const negX = teams.x == null ? 100 - AP_SIDE_DEF_X : 100 - teams.x;
+    tEl.style.left = topic.x + '%'; tEl.style.top = topic.y + '%';
+    affEl.style.left = affX + '%'; affEl.style.top = teams.y + '%';
+    negEl.style.left = negX + '%'; negEl.style.top = teams.y + '%';
     tEl.style.color = a.style.topic.color;
-    gEl.style.color = a.style.teams.color;
+    affEl.style.color = a.style.teams.color;
+    negEl.style.color = a.style.teams.color;
     tEl.style.fontSize = Appearance.fontCss('topic', a.style.topic.size) || '';
-    gEl.style.fontSize = Appearance.fontCss('teams', a.style.teams.size) || '';
+    const tfs = Appearance.fontCss('teams', a.style.teams.size) || '';
+    affEl.style.fontSize = tfs; negEl.style.fontSize = tfs;
   }
-  function apChipEq(p, cur, kind) {
-    if (p.y == null) return cur == null;
-    if (cur == null) return false;
-    return p.y === cur.y && (kind === 'topic' ? p.a === cur.align : true);
-  }
-  function apSyncChips() {
+  // 「水平居中」:辩题 x 回 50;队名 x 回 null(= 水平沿用默认的贴左右边)。
+  // 未自定义过(y 也还没设)时该元素本来就在默认位置,只提示不动数据。
+  function apCenterPos(kind) {
     const a = APPEAR.state();
-    const mark = (containerId, presets, cur, kind) => {
-      const box = ap(containerId); if (!box) return;
-      Array.prototype.forEach.call(box.querySelectorAll('.ap-chip'), (b, i) => {
-        b.classList.toggle('sel', apChipEq(presets[i], cur, kind));
-      });
-    };
-    mark('ap-preset-topic', AP_TOPIC_PRESETS, a.pos.topic, 'topic');
-    mark('ap-preset-teams', AP_TEAMS_PRESETS, a.pos.teams, 'teams');
+    const cur = a.pos[kind];
+    if (!cur) { apMsg(kind === 'topic' ? '辩题已在默认位置(顶部居中)' : '队名已在默认左右位置'); return; }
+    if (kind === 'topic') a.pos.topic = { x: Appearance.DEFAULT_X, y: cur.y };
+    else a.pos.teams = { x: null, y: cur.y };
+    APPEAR.save(a); apPaint();
+    apMsg(kind === 'topic' ? '辩题已水平居中' : '队名已恢复到左右默认水平位置');
   }
-  function apBuildChipGroup(containerId, presets, kind) {
-    const box = ap(containerId); if (!box) return;
-    box.innerHTML = '';
-    const label = document.createElement('span');
-    label.className = 'ap-chips-label';
-    label.textContent = kind === 'topic' ? '辩题位置:' : '队伍名位置:';
-    box.appendChild(label);
-    presets.forEach((p) => {
-      const b = document.createElement('button');
-      b.type = 'button'; b.className = 'ap-chip'; b.textContent = p.l;
-      b.addEventListener('click', () => {
-        const a = APPEAR.state();
-        if (p.y == null) a.pos[kind] = null;
-        else if (kind === 'topic') a.pos[kind] = { y: p.y, align: p.a };
-        else a.pos[kind] = { y: p.y };
-        APPEAR.save(a); apSyncChips(); apPaint();
-        apMsg(p.l === '默认' ? '已恢复该元素默认位置' : '已设为「' + p.l + '」,开始比赛后生效');
-      });
-      box.appendChild(b);
-    });
+  function apResetPos(kind) {
+    const a = APPEAR.state();
+    a.pos[kind] = null;
+    APPEAR.save(a); apPaint();
+    apMsg(kind === 'topic' ? '已恢复辩题默认位置' : '已恢复队名默认位置');
+  }
+  function apBindPosButtons() {
+    const wire = (id, fn) => { const el = ap(id); if (el) el.addEventListener('click', fn); };
+    wire('ap-center-topic', () => apCenterPos('topic'));
+    wire('ap-reset-topic', () => apResetPos('topic'));
+    wire('ap-center-teams', () => apCenterPos('teams'));
+    wire('ap-reset-teams', () => apResetPos('teams'));
   }
   function apBuildStyles() {
     const box = ap('ap-style-rows'); if (!box) return;
@@ -1841,7 +1850,7 @@ tr.row-content > td { background: #fbfaf4; }
   function apSyncControls() {
     const a = APPEAR.state();
     const sh = ap('ap-shadow'); if (sh) sh.checked = a.shadow;
-    apSyncStyles(); apSyncChips(); apPaint();
+    apSyncStyles(); apPaint();
   }
   function apMsg(text) {
     const m = ap('ap-msg'); if (!m) return;
@@ -1850,7 +1859,8 @@ tr.row-content > td { background: #fbfaf4; }
   }
   function apBindDrag() {
     const canvas = ap('ap-preview'); if (!canvas) return;
-    [['ap-drag-topic', 'topic'], ['ap-drag-teams', 'teams']].forEach(([id, kind]) => {
+    // mirror=true 表示拖的是反方手柄:指针位置要折回正方块心(100 - px)
+    const bind = (id, kind, mirror) => {
       const el = document.getElementById(id); if (!el) return;
       el.addEventListener('pointerdown', (ev) => {
         ev.preventDefault();
@@ -1860,13 +1870,16 @@ tr.row-content > td { background: #fbfaf4; }
       el.addEventListener('pointermove', (ev) => {
         if (el.dataset.drag !== '1') return;
         const r = canvas.getBoundingClientRect();
-        const x = clampN((ev.clientX - r.left) / r.width * 100, 0, 100);
+        const px = clampN((ev.clientX - r.left) / r.width * 100, 0, 100);
         const y = Math.round(Appearance.clampY((ev.clientY - r.top) / r.height * 100, 34, 56) * 10) / 10;
         const a = APPEAR.state();
         if (kind === 'topic') {
-          a.pos.topic = { y, align: x < 30 ? 'left' : x > 70 ? 'right' : 'center' };
-        } else { a.pos.teams = { y }; }
-        APPEAR.save(a); apSyncChips(); apPaint();
+          a.pos.topic = { x: Math.round(px * 10) / 10, y };
+        } else {
+          const affX = mirror ? 100 - px : px;   // 反方手柄 → 折回正方块心
+          a.pos.teams = { x: clampN(Math.round(affX * 10) / 10, 0, Appearance.TEAMS_X_MAX), y };
+        }
+        APPEAR.save(a); apPaint();
       });
       const endDrag = (ev) => {
         if (el.dataset.drag !== '1') return;
@@ -1875,7 +1888,10 @@ tr.row-content > td { background: #fbfaf4; }
       };
       el.addEventListener('pointerup', endDrag);
       el.addEventListener('pointercancel', endDrag);
-    });
+    };
+    bind('ap-drag-topic', 'topic', false);
+    bind('ap-drag-aff', 'teams', false);
+    bind('ap-drag-neg', 'teams', true);
   }
 
   // ---------- 版本 / 自动草稿 ----------
@@ -2164,9 +2180,7 @@ tr.row-content > td { background: #fbfaf4; }
       if (C.cur) return;
       bootstrapWorking();          // 迁移种子/恢复草稿/全新默认 → 定 C.cur + 挂载版本 + 快照
       bindSessionFields(); bindArt();
-      apBuildChipGroup('ap-preset-topic', AP_TOPIC_PRESETS, 'topic');
-      apBuildChipGroup('ap-preset-teams', AP_TEAMS_PRESETS, 'teams');
-      apBuildStyles(); apBindDrag();
+      apBuildStyles(); apBindDrag(); apBindPosButtons();
       const shadowBox = $('ap-shadow');
       if (shadowBox) shadowBox.addEventListener('change', () => {
         const a = APPEAR.state(); a.shadow = shadowBox.checked; APPEAR.save(a);
@@ -2316,8 +2330,13 @@ document.addEventListener('DOMContentLoaded', () => window.DT.init());
   function resetAppearanceLayout(scr) {
     scr.classList.remove('userpos');
     const head = scr.querySelector('.t-head'); if (head) head.style.display = '';
-    clearProps($('t-topic'), ['position', 'top', 'left', 'right', 'transform', 'textAlign', 'paddingLeft', 'paddingRight']);
-    clearProps(scr.querySelector('.t-teams'), ['position', 'top', 'left', 'right', 'transform', 'textAlign', 'paddingLeft', 'paddingRight']);
+    const teamsEl = scr.querySelector('.t-teams');
+    if (teamsEl) teamsEl.style.display = '';       // 队名左右分置时会退成 contents
+    const MOVED = ['position', 'top', 'left', 'right', 'transform', 'textAlign'];
+    clearProps($('t-topic'), MOVED);
+    clearProps(teamsEl, MOVED);
+    clearProps($('name-aff'), MOVED);
+    clearProps($('name-neg'), MOVED);
     textIds().forEach((id) => { const el = $(id); if (el) { el.style.fontSize = ''; el.style.color = ''; el.style.textShadow = ''; } });
   }
 
@@ -2339,15 +2358,15 @@ document.addEventListener('DOMContentLoaded', () => window.DT.init());
     };
   }
 
-  function styleMoved(el, y, align) {
+  // 块满宽(.userpos 下 left:0/right:0/width:100%),故 translateX(x-50%) 的百分比即屏宽比例:
+  // x=50 平移 0(与默认居中逐像素一致),x=0/100 时块心贴到屏幕左/右边缘。
+  function styleMoved(el, x, y) {
     if (!el) return;
     el.style.position = 'absolute';
     el.style.left = '0'; el.style.right = '0';
     el.style.top = clampNum(y, 0, 100) + '%';
-    el.style.transform = 'translateY(-50%)';
-    el.style.textAlign = align;
-    el.style.paddingLeft = align === 'left' ? '6%' : '';
-    el.style.paddingRight = align === 'right' ? '6%' : '';
+    el.style.transform = 'translate(' + (clampNum(x, 0, 100) - 50) + '%, -50%)';
+    el.style.textAlign = 'center';
   }
 
   function applyAppearance() {
@@ -2387,12 +2406,23 @@ document.addEventListener('DOMContentLoaded', () => window.DT.init());
       topicY = Appearance.clampY(ap.pos.topic ? ap.pos.topic.y : topicM, band.low, band.high);
       teamsY = Appearance.clampY(ap.pos.teams ? ap.pos.teams.y : teamsM, band.low, band.high);
     }
-    const align = ap.pos.topic ? ap.pos.topic.align : 'center';
+    const topicX = ap.pos.topic ? ap.pos.topic.x : Appearance.DEFAULT_X;
 
     scr.classList.add('userpos');
     const head = scr.querySelector('.t-head'); if (head) head.style.display = 'contents';
-    styleMoved($('t-topic'), topicY, align);
-    styleMoved(scr.querySelector('.t-teams'), teamsY, 'center');
+    styleMoved($('t-topic'), topicX, topicY);
+
+    // 队名:x 为 null(未设水平)→ 整块仍走原 grid,只应用 y;有 x → 容器退成 contents,
+    // 正/反两方各自绝对定位在 x 与 100-x(以屏幕中线镜像),两方共用同一个 y。
+    const teamsEl = scr.querySelector('.t-teams');
+    const teamsX = ap.pos.teams ? ap.pos.teams.x : null;
+    if (teamsX == null || !teamsEl) {
+      styleMoved(teamsEl, Appearance.DEFAULT_X, teamsY);
+    } else {
+      teamsEl.style.display = 'contents';
+      styleMoved($('name-aff'), teamsX, teamsY);
+      styleMoved($('name-neg'), 100 - teamsX, teamsY);
+    }
   }
 
   let appearScheduled = false;

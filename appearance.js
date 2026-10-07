@@ -1,6 +1,6 @@
 // 辩论赛计时器 · 投屏外观(纯逻辑,node 安全可测)
 // 定义「投屏外观」默认值、归一化与字号换算;不含 DOM / localStorage。
-// 一份外观 = 辩题/队伍名 的位置(pos) + 五组文字的颜色/字号(style) + 投影开关。
+// 一份外观 = 辩题/队伍名 的位置(pos: 百分比 x/y,块心坐标) + 五组文字的颜色/字号(style) + 投影开关。
 // 铁律:全为默认时不产生任何 inline/类 → 计时屏视觉与改动前逐像素一致。
 (function (root) {
   'use strict';
@@ -15,9 +15,11 @@
     state: { min: 13, vw: 1.8, max: 20 },
   };
   const GROUPS = ['topic', 'teams', 'stage', 'time', 'state'];
-  const ALIGNS = ['left', 'center', 'right'];
   const DEFAULT_COLOR = '#ffffff';
   const SIZE_MIN = 0.5, SIZE_MAX = 2;
+  const DEFAULT_X = 50;                                    // 辩题块心默认落在屏幕水平中央
+  const TEAMS_X_MAX = 50;                                  // 队名:正方块心上界(不许越过中线,反方取 100-x)
+  const ALIGN_X = { left: 12, center: 50, right: 88 };     // 旧版 align(三档)→ x,仅用于读旧数据
 
   const newStyle = () => ({ color: DEFAULT_COLOR, size: 1 });
   const newDefault = () => ({
@@ -30,13 +32,20 @@
   const clamp = (v, lo, hi) => Math.min(hi, Math.max(lo, v));
   const num = (v, d) => (Number.isFinite(v) ? v : d);
 
-  function normPos(v, hasAlign) {
+  // 位置:x/y 均为百分比(0-100)。topic 的 x 是块心(缺省 50 居中,旧数据只有 align 时按 ALIGN_X 折算);
+  // teams 的 x 是「正方块心」(反方块心恒为 100 - x),缺省/非法为 null = 水平沿用默认(正方贴左、反方贴右)。
+  function normPos(v, kind) {
     if (v == null || typeof v !== 'object') return null;
-    const y = clamp(Math.round(num(v.y, NaN) * 10) / 10, 0, 100);
+    const r1 = (n) => Math.round(n * 10) / 10;
+    const y = clamp(r1(num(v.y, NaN)), 0, 100);
     if (!Number.isFinite(y)) return null;
-    const out = { y };
-    if (hasAlign) out.align = ALIGNS.indexOf(v.align) >= 0 ? v.align : 'center';
-    return out;
+    let xv = v.x;
+    if (kind === 'topic') {
+      if (xv == null && v.align != null && ALIGN_X[v.align] != null) xv = ALIGN_X[v.align];
+      return { x: clamp(r1(num(xv, DEFAULT_X)), 0, 100), y };
+    }
+    const n = num(xv, NaN);
+    return { x: Number.isFinite(n) ? clamp(r1(n), 0, TEAMS_X_MAX) : null, y };
   }
 
   function normStyle(s) {
@@ -52,8 +61,8 @@
     const out = newDefault();
     if (raw == null || typeof raw !== 'object') return out;
     const p = (raw.pos && typeof raw.pos === 'object') ? raw.pos : {};
-    out.pos.topic = normPos(p.topic, true);
-    out.pos.teams = normPos(p.teams, false);
+    out.pos.topic = normPos(p.topic, 'topic');
+    out.pos.teams = normPos(p.teams, 'teams');
     const st = (raw.style && typeof raw.style === 'object') ? raw.style : {};
     GROUPS.forEach((g) => { out.style[g] = normStyle(st[g]); });
     out.shadow = raw.shadow !== false;
@@ -91,7 +100,7 @@
     return (v - lowMax <= highMin - v) ? Math.max(0, lowMax) : Math.min(100, highMin);
   }
 
-  const API = { FONTS, GROUPS, ALIGNS, DEFAULT_COLOR, SIZE_MIN, SIZE_MAX,
+  const API = { FONTS, GROUPS, DEFAULT_COLOR, SIZE_MIN, SIZE_MAX, DEFAULT_X, TEAMS_X_MAX,
                 normalize, isDefault, userPosActive, fontCss, clampY };
   if (typeof module !== 'undefined' && module.exports) module.exports = API;
   else root.Appearance = API;

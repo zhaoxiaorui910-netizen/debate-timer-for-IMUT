@@ -44,16 +44,40 @@ function eq(name, a, b) {
   ok('非数值 size 回退 1', A.normalize({ style: { time: { size: 'abc' } } }).style.time.size === 1);
 }
 
-// ---------- normalize:位置 ----------
+// ---------- normalize:位置(辩题 x/y 自由;队名 x=正方块心,反方镜像) ----------
 {
-  const a = A.normalize({ pos: { topic: { y: 30, align: 'right' }, teams: { y: 88, align: 'left' } } });
-  eq('topic 位置保留 y+align', a.pos.topic, { y: 30, align: 'right' });
-  ok('teams 无水平自由度(丢弃 align)', a.pos.teams && a.pos.teams.align === undefined && a.pos.teams.y === 88);
+  const a = A.normalize({ pos: { topic: { x: 30, y: 30 }, teams: { x: 20, y: 88 } } });
+  eq('topic 位置保留 x+y', a.pos.topic, { x: 30, y: 30 });
+  eq('队名 位置保留 x+y', a.pos.teams, { x: 20, y: 88 });
+  eq('x 小数保留一位', A.normalize({ pos: { topic: { x: 12.34, y: 10 } } }).pos.topic.x, 12.3);
 
   eq('y 越界钳制 150→100', A.normalize({ pos: { topic: { y: 150 } } }).pos.topic.y, 100);
   eq('y 越界钳制 -5→0', A.normalize({ pos: { topic: { y: -5 } } }).pos.topic.y, 0);
-  ok('align 非法回退 center', A.normalize({ pos: { topic: { y: 10, align: 'top' } } }).pos.topic.align === 'center');
+  eq('topic x 越界钳制 150→100', A.normalize({ pos: { topic: { x: 150, y: 10 } } }).pos.topic.x, 100);
+  eq('topic x 越界钳制 -5→0', A.normalize({ pos: { topic: { x: -5, y: 10 } } }).pos.topic.x, 0);
+  eq('topic x 缺省补 50(居中)', A.normalize({ pos: { topic: { y: 10 } } }).pos.topic.x, 50);
+  eq('topic x 非数值回退 50', A.normalize({ pos: { topic: { x: 'abc', y: 10 } } }).pos.topic.x, 50);
+
+  // 队名:正方只在左半边,x 缺省/非法 = null(水平回默认贴左右边)
+  eq('队名 x 缺省 → null(水平回默认)', A.normalize({ pos: { teams: { y: 88 } } }).pos.teams.x, null);
+  eq('队名 x 超右界 150→50', A.normalize({ pos: { teams: { x: 150, y: 88 } } }).pos.teams.x, 50);
+  eq('队名 x 越左界 -5→0', A.normalize({ pos: { teams: { x: -5, y: 88 } } }).pos.teams.x, 0);
+  eq('队名 x 非数值 → null', A.normalize({ pos: { teams: { x: 'abc', y: 88 } } }).pos.teams.x, null);
+  ok('队名 x=0 是有效值(不等于 null)', A.normalize({ pos: { teams: { x: 0, y: 88 } } }).pos.teams.x === 0);
+
+  // 旧数据兼容:无 x 有 align → 映射到 x
+  eq('旧 align=left → x 12', A.normalize({ pos: { topic: { y: 30, align: 'left' } } }).pos.topic, { x: 12, y: 30 });
+  eq('旧 align=center → x 50', A.normalize({ pos: { topic: { y: 30, align: 'center' } } }).pos.topic.x, 50);
+  eq('旧 align=right → x 88', A.normalize({ pos: { topic: { y: 30, align: 'right' } } }).pos.topic.x, 88);
+  eq('旧 align 非法 → x 50', A.normalize({ pos: { topic: { y: 30, align: 'top' } } }).pos.topic.x, 50);
+  eq('有 x 时忽略旧 align', A.normalize({ pos: { topic: { x: 70, y: 30, align: 'left' } } }).pos.topic.x, 70);
+  eq('旧队名 align 被忽略(仍为 null)', A.normalize({ pos: { teams: { y: 88, align: 'left' } } }).pos.teams.x, null);
+
   ok('topic 位置非对象视为 null', A.normalize({ pos: { topic: 5 } }).pos.topic === null);
+  ok('队名 位置非对象视为 null', A.normalize({ pos: { teams: 'x' } }).pos.teams === null);
+  ok('y 非数值视为未启用', A.normalize({ pos: { topic: { x: 30, y: 'x' } } }).pos.topic === null);
+  ok('位置只剩默认 x 也视为启用', A.normalize({ pos: { topic: { x: 50, y: 10 } } }).pos.topic.y === 10);
+  ok('队名只有 y 也算启用', A.normalize({ pos: { teams: { y: 88 } } }).pos.teams.y === 88);
   ok('空 pos 视为未启用', A.normalize({ pos: {} }).pos.topic === null && A.normalize({ pos: {} }).pos.teams === null);
 }
 
@@ -89,9 +113,11 @@ function eq(name, a, b) {
   ok('非数值 y 回退 highMin', A.clampY('x', 30, 70) === 70);
 }
 
-// ---------- FONTS 表完整性 ----------
+// ---------- FONTS 表完整性 / 常量 ----------
 {
   ok('五组都有字号', A.GROUPS.length === 5 && A.GROUPS.every((g) => A.FONTS[g] && A.FONTS[g].min > 0));
+  ok('默认水平位置 x=50', A.DEFAULT_X === 50);
+  ok('队名正方块心上界 50', A.TEAMS_X_MAX === 50);
 }
 
 console.log('appearance.test: ' + pass + ' passed, ' + fail + ' failed');
